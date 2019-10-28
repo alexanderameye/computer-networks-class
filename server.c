@@ -6,6 +6,13 @@
 #include <string.h>
 #include "common.h"
 
+/* For example http://localhost:10080/alex.html
+ * url turned into request message
+ * GET /alex.html HTTP/1.1
+ * Host: localhost:10080
+ *
+ * */
+
 void die(char *message, ...) {
     va_list ap;
     va_start(ap, message);
@@ -74,20 +81,63 @@ int main(int argc, char const *argv[]) {
         if ((value_read = read(client_socket, request, BUFFER_SIZE)) >= 0) {
             live("Client request received:\n%s%s%s\n", COLOR_CLIENT_CONTENT, request,
                  COLOR_NEUTRAL);
+
+            /* GET REQUESTED FILE */
+            const char *start_of_path = strchr(request, '/') + 1;
+            const char *end_of_path = strchr(request, 'H') - 1;
+            char path[end_of_path - start_of_path];
+            strncpy(path, start_of_path, end_of_path - start_of_path);
+            path[sizeof(path)] = 0;
+            live("Requested file:\n%s%s%s\n", COLOR_CLIENT_CONTENT, path, COLOR_NEUTRAL);
+
+            /* CREATE HEADERS BASED ON FILE TYPE */
+            char *server_response;
+            char *dot = strrchr(path, '.');
+            if (dot && !strcmp(dot, ".html")) {
+                server_response =
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: text/html\r\n\n";
+            } else if (dot && !strcmp(dot, ".jpg")) {
+                server_response =
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: image/jpg\r\n\n";
+            }
+
+            /* READ FILE CONTENTS */
+            FILE *file;
+            char    *content;
+            long    numbytes;
+
+            file = fopen(path, "r");
+
+            fseek(file, 0L, SEEK_END);
+            numbytes = ftell(file);
+            fseek(file, 0L, SEEK_SET);
+
+            content = (char*)calloc(numbytes, sizeof(char));
+
+            fread(content, sizeof(char), numbytes, file);
+            fclose(file);
+
+            /* ADD FILE CONTENTS TO HEADER */
+            strcat(server_response, "<h1>ALEX</h1>");
+
+            free(content);
             memset(request, 0, BUFFER_SIZE);
         } else {
             die("Reading client request failed");
             close(client_socket);
         }
 
-        /* WRITE SERVER RESPONSE */
-        sprintf(response, "GET /%s HTTP/1.1\r\n\r\n", server_response);
-        send_bytes = strlen(response);
 
-        if (write(client_socket, response, send_bytes) != send_bytes)
+        /* WRITE SERVER RESPONSE */
+
+        send_bytes = strlen(server_response);
+
+        if (write(client_socket, server_response, send_bytes) != send_bytes)
             die("Writing server response failed");
         else
-            live("Server response sent:\n%s%s%s", COLOR_SERVER_CONTENT, response, COLOR_NEUTRAL);
+            live("Server response sent:\n%s%s%s", COLOR_SERVER_CONTENT, server_response, COLOR_NEUTRAL);
 
         close(client_socket);
     }
