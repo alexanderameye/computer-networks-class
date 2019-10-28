@@ -1,7 +1,6 @@
 #include "common.h"
 
-void die(char *message, ...)
-{
+void die(char *message, ...) {
     va_list ap;
     va_start(ap, message);
     printf("%s[CLIENT] ", COLOR_NEGATIVE);
@@ -14,8 +13,7 @@ void die(char *message, ...)
     exit(1);
 }
 
-void live(char *message, ...)
-{
+void live(char *message, ...) {
     va_list ap;
     va_start(ap, message);
     printf("%s[CLIENT] ", COLOR_ACTION);
@@ -26,15 +24,14 @@ void live(char *message, ...)
     va_end(ap);
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     /* VARIABLES */
     int n;
     int client_socket;
     struct socket_address server_address;
-    char sendline[BUFFER_SIZE];
-    char recvline[BUFFER_SIZE];
-    int sendbytes;
+    char request[BUFFER_SIZE];
+    char response[BUFFER_SIZE];
+    int send_bytes;
 
     /* CREATE CLIENT SOCKET */
     /* creates a client socket */
@@ -50,8 +47,7 @@ int main(int argc, char *argv[])
 
     /* CONNECT */
     /* connects client socket to server socket */
-    if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) == -1)
-    {
+    if (connect(client_socket, (struct sockaddr *) &server_address, sizeof(server_address)) == -1) {
         close(client_socket);
         die("Connection with server failed");
     }
@@ -59,30 +55,26 @@ int main(int argc, char *argv[])
     char object_path_name[200];
     scanf("%s", object_path_name);
 
-    /* SEND */
-    sprintf(sendline, "GET /%s HTTP/1.1\r\n\r\n", object_path_name);
-    sendbytes = strlen(sendline);
+    /* WRITE CLIENT REQUEST */
+    sprintf(request, "GET /%s HTTP/1.1\r\n\r\n", object_path_name);
+    send_bytes = strlen(request);
 
-    if (write(client_socket, sendline, sendbytes) != sendbytes)
-        die("Writing error");
+    if (write(client_socket, request, send_bytes) != send_bytes)
+        die("Writing client request failed");
     else
-        live("Message sent:\n%s%s%s", COLOR_CLIENT_CONTENT, sendline, COLOR_NEUTRAL);
+        live("Client request sent:\n%s%s%s", COLOR_CLIENT_CONTENT, request, COLOR_NEUTRAL);
 
-    while ((n = read(client_socket, recvline, BUFFER_SIZE - 1)) > 0)
-    {
-        live("Message received:\n%s%s%s\n", COLOR_CLIENT_CONTENT, recvline,
+    /* READ SERVER RESPONSE */
+    while ((n = read(client_socket, response, BUFFER_SIZE - 1)) > 0) {
+        live("Message received:\n%s%s%s\n", COLOR_SERVER_CONTENT, response,
              COLOR_NEUTRAL);
-        memset(recvline, 0, BUFFER_SIZE);
+        memset(response, 0, BUFFER_SIZE);
     }
 
-    if (n < 0)
-    {
+    if (n < 0) {
         die("Reading message failed");
         close(client_socket);
-    }
-
-    else if (n == 0)
-    {
+    } else if (n == 0) {
         live("Ending connection");
         close(client_socket);
     }
