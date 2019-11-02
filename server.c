@@ -6,13 +6,37 @@
 #include <string.h>
 #include "common.h"
 #include <pthread.h>
+#include <sys/types.h>
+
+typedef struct {
+    char *ext;
+    char *mediatype;
+} extn;
+
+extn extensions[] = {
+        {"gif",  "image/gif"},
+        {"txt",  "text/plain"},
+        {"jpg",  "image/jpg"},
+        {"jpeg", "image/jpeg"},
+        {"png",  "image/png"},
+        {"ico",  "image/ico"},
+        {"zip",  "image/zip"},
+        {"gz",   "image/gz"},
+        {"tar",  "image/tar"},
+        {"htm",  "text/html"},
+        {"html", "text/html"},
+        {"php",  "text/html"},
+        {"pdf",  "application/pdf"},
+        {"zip",  "application/octet-stream"},
+        {"rar",  "application/octet-stream"},
+        {0,      0}};
+
 
 //gcc -o server server.c -lpthread
 
-//TODO: send not on same wifi working
-//TODO: jpg files
+void send_html_header(void);
 
-void *connection_handler(void *);
+void *handle_connection(void *);
 
 void die(char *message, ...) {
     va_list ap;
@@ -39,16 +63,10 @@ void live(char *message, ...) {
 }
 
 int main(int argc, char const *argv[]) {
-    /* VARIABLES */
     int server_socket, client_socket;
     int *client_sock;
-
-    struct sockaddr_in server_address, client_address;
+    struct sockaddr_in server_address;
     int address_length = sizeof(server_address);
-
-
-    char response[BUFFER_SIZE];
-
 
     /* CREATE SERVER SOCKET */
     if ((server_socket = socket(SOCKET_DOMAIN, SOCKET_TYPE, SOCKET_PROTOCOL)) == -1)
@@ -58,9 +76,9 @@ int main(int argc, char const *argv[]) {
     server_address.sin_family = SOCKET_DOMAIN;
     server_address.sin_addr.s_addr = INADDR_ANY;
     server_address.sin_port = htons(SERVER_PORT);
+    memset(&(server_address.sin_zero), '\0', 8);
 
-    /* BIND */
-    /* assigns port number to server socket */
+    /* BIND PORT NUMBER TO SERVER SOCKET */
     if (bind(server_socket, (struct sockaddr *) &server_address, sizeof(server_address)) == -1)
         die("Socket bind failed");
     else live("Socket bound");
@@ -68,14 +86,18 @@ int main(int argc, char const *argv[]) {
     /* LISTEN FOR CONNECTION REQUESTS */
     if (listen(server_socket, MAX_CONNECTIONS) == -1) die("Socket listen failed");
 
-    while ((client_socket = accept(server_socket, (struct sockaddr *) &server_address,
-                                   (socklen_t * ) & address_length))) {
+    while (1) {
+        live("Socket listening...");
+        if ((client_socket = accept(server_socket, (struct sockaddr *) &server_address,
+                                    (socklen_t * ) & address_length)) == -1)
+            die("Socket accept failed");
+        else live("Client socket accepted");
 
         pthread_t sniffer_thread;
         client_sock = malloc(1);
         *client_sock = client_socket;
 
-        if (pthread_create(&sniffer_thread, NULL, connection_handler, (void *) client_sock) == -1)
+        if (pthread_create(&sniffer_thread, NULL, handle_connection, (void *) client_sock) == -1)
             die("Thread creation failed");
         else live("Connection thread created");
 
@@ -84,8 +106,13 @@ int main(int argc, char const *argv[]) {
     return 0;
 }
 
-void *connection_handler(void *socket_desc) {
 
+/* This function handles the connection on the passed socket from the
+ * passed client address.  The connection is processed as a web request
+ * and this function replies over the connected socket.  Finally, the
+ * passed socket is closed at the end of the function.
+ */
+void *handle_connection(void *socket_desc) {
     int socket = *(int *) socket_desc;
     int send_bytes;
     long value_read, value_write;
@@ -107,21 +134,13 @@ void *connection_handler(void *socket_desc) {
         path[sizeof(path)] = 0;
         live("Requested file:\n%s%s%s\n", COLOR_CLIENT_CONTENT, path, COLOR_NEUTRAL);
 
-        /* CREATE HEADERS BASED ON FILE TYPE */
+        /* SEND RESPONSE BASED ON FILE TYPE */
         char *dot = strrchr(path, '.');
         if (dot && !strcmp(dot, ".html")) { //HTML
             server_response_header =
                     "HTTP/1.1 200 OK\r\n"
                     "Content-Type: text/html\r\n\n";
-        } else if (dot && !strcmp(dot, ".jpg")) { //JPG
-            server_response_header =
-                    "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: image/jpg\r\n\n";
-
-            live("RESPONSE: \n%s%s%s\n", COLOR_CLIENT_CONTENT, server_response_header, COLOR_NEUTRAL);
-        }
-
-        else if (dot && !strcmp(dot, ".jpeg")) { //JPG
+        } else if (dot && !strcmp(dot, ".jpeg")) { //JPEG
             server_response_header =
                     "HTTP/1.1 200 OK\r\n"
                     "Content-Type: image/jpeg\r\n\n";
@@ -129,7 +148,7 @@ void *connection_handler(void *socket_desc) {
             live("RESPONSE: \n%s%s%s\n", COLOR_CLIENT_CONTENT, server_response_header, COLOR_NEUTRAL);
         }
 
-        
+
         /* READ FILE CONTENTS */
         FILE *file = fopen(path, "rb");
 
@@ -153,6 +172,7 @@ void *connection_handler(void *socket_desc) {
 
             /* WRITE SERVER RESPONSE */
             send_bytes = strlen(server_response);
+
             if (write(socket, server_response, send_bytes) != send_bytes)
                 die("Writing server response failed");
             else
@@ -176,7 +196,8 @@ void *connection_handler(void *socket_desc) {
 
         close(socket);
     }
+}
 
-
+void send_html_header(void) {
 
 }
