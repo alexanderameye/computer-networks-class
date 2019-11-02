@@ -14,6 +14,8 @@
 
 #define HTML404 "<html><head> <title>404 Not Found</title> <style> html{ height: 100%; } body{ font-family: 'Segoe UI', sans-serif;; height: 100%; } .wrap { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #fafafa; } .login-form{ border: 1px solid #ddd; padding: 2rem; background: #ffffff; } .form-button{ background: #d95b52; border: 1px solid #ddd; color: #ffffff; padding: 10px; width: 100%;font-weight:bold; } .form-header{ text-align: center; margin-bottom : 1rem; } </style></head><body> <div class=\"wrap\"> <form class=\"login-form\"> <div class=\"form-header\"> <h3>404 Not Found</h3> </div> <button class=\"form-button\" onclick=\"location.href='/index.html'\" type=\"button\">Go Back</button> </form> </div></body></html>\r\n"
 
+
+
 void *handle_connection(void *);
 
 int main(int argc, char const *argv[]) {
