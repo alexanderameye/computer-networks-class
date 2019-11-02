@@ -13,30 +13,8 @@
  *
  * */
 
-void die(char *message, ...) {
-    va_list ap;
-    va_start(ap, message);
-    printf("%s[SERVER] ", COLOR_NEGATIVE);
-    printf("%s%s\n", COLOR_NEUTRAL, message);
-    vfprintf(stdout, message, ap);
-    fprintf(stdout, "\n");
-    fflush(stdout);
-    perror("");
-    va_end(ap);
-    exit(1);
-}
-
-void live(char *message, ...) {
-    va_list ap;
-    va_start(ap, message);
-    printf("%s[SERVER] ", COLOR_ACTION);
-    printf("%s", COLOR_NEUTRAL);
-    vfprintf(stdout, message, ap);
-    fprintf(stdout, "\n");
-    fflush(stdout);
-    va_end(ap);
-}
-
+void die(char *message, ...);
+void live(char *message, ...);
 
 int main(int argc, char const *argv[]) {
     /* VARIABLES */
@@ -47,7 +25,7 @@ int main(int argc, char const *argv[]) {
     int send_bytes;
     char request[BUFFER_SIZE];
     char response[BUFFER_SIZE];
-    char *server_response = "Hello from server";
+    char *server_response = "No message";
 
     /* CREATE SERVER SOCKET */
     /* creates a server socket */
@@ -70,6 +48,7 @@ int main(int argc, char const *argv[]) {
     /* LISTEN */
     if (listen(server_socket, MAX_CONNECTIONS) == -1) die("Socket listen failed");
 
+
     while (1) {
         live("Socket listening...");
         if ((client_socket = accept(server_socket, (struct sockaddr *) &server_address,
@@ -91,38 +70,72 @@ int main(int argc, char const *argv[]) {
             live("Requested file:\n%s%s%s\n", COLOR_CLIENT_CONTENT, path, COLOR_NEUTRAL);
 
             /* CREATE HEADERS BASED ON FILE TYPE */
-            char *server_response;
+            char *response_header;
             char *dot = strrchr(path, '.');
             if (dot && !strcmp(dot, ".html")) {
-                server_response =
+                response_header =
                         "HTTP/1.1 200 OK\r\n"
                         "Content-Type: text/html\r\n\n";
+
+                FILE *file;
+                char *content;
+                long numbytes;
+
+                file = fopen(path, "r");
+
+                fseek(file, 0L, SEEK_END);
+                numbytes = ftell(file); //returns current file position
+                fseek(file, 0L, SEEK_SET); //reset file position
+
+                content = (char *) calloc(numbytes, sizeof(char));
+
+                fread(content, sizeof(char), numbytes, file);
+                fclose(file);
+
+                //  char *content = "<h1>AA</h1>";
+                server_response = (char *) malloc(1 + strlen(response_header) + strlen(content));
+                strcpy(server_response, response_header);
+                strcat(server_response, content);
+
+                free(content);
+
+
             } else if (dot && !strcmp(dot, ".jpg")) {
-                server_response =
+                response_header =
                         "HTTP/1.1 200 OK\r\n"
                         "Content-Type: image/jpg\r\n\n";
+
+                FILE *file;
+                char *content;
+                long numbytes;
+
+                file = fopen(path, "r");
+
+                fseek(file, 0L, SEEK_END);
+                numbytes = ftell(file); //returns current file position
+                fseek(file, 0L, SEEK_SET); //reset file position
+
+                content = (char *) calloc(numbytes, sizeof(char));
+
+                fread(content, sizeof(char), numbytes, file);
+                fclose(file);
+
+
+                //  char *content = "<h1>AA</h1>";
+                server_response = (char *) malloc(1 + strlen(response_header) + strlen(content));
+                strcpy(server_response, response_header);
+                strcat(server_response, content);
+
+                free(content);
+
+
+            } else {
+                response_header =
+                        "HTTP/1.1 404 Not Found\r\n"
+                        "Content-Type: image/jpg\r\n\n<h1>404</h1>";
+
             }
 
-            /* READ FILE CONTENTS */
-            FILE *file;
-            char    *content;
-            long    numbytes;
-
-            file = fopen(path, "r");
-
-            fseek(file, 0L, SEEK_END);
-            numbytes = ftell(file);
-            fseek(file, 0L, SEEK_SET);
-
-            content = (char*)calloc(numbytes, sizeof(char));
-
-            fread(content, sizeof(char), numbytes, file);
-            fclose(file);
-
-            /* ADD FILE CONTENTS TO HEADER */
-            strcat(server_response, "<h1>ALEX</h1>");
-
-            free(content);
             memset(request, 0, BUFFER_SIZE);
         } else {
             die("Reading client request failed");
@@ -142,4 +155,30 @@ int main(int argc, char const *argv[]) {
         close(client_socket);
     }
     return 0;
+}
+
+
+
+void die(char *message, ...) {
+    va_list ap;
+    va_start(ap, message);
+    printf("%s[SERVER] ", COLOR_NEGATIVE);
+    printf("%s%s\n", COLOR_NEUTRAL, message);
+    vfprintf(stdout, message, ap);
+    fprintf(stdout, "\n");
+    fflush(stdout);
+    perror("");
+    va_end(ap);
+    exit(1);
+}
+
+void live(char *message, ...) {
+    va_list ap;
+    va_start(ap, message);
+    printf("%s[SERVER] ", COLOR_ACTION);
+    printf("%s", COLOR_NEUTRAL);
+    vfprintf(stdout, message, ap);
+    fprintf(stdout, "\n");
+    fflush(stdout);
+    va_end(ap);
 }
