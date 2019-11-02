@@ -121,13 +121,15 @@ void *connection_handler(void *socket_desc) {
             live("RESPONSE: \n%s%s%s\n", COLOR_CLIENT_CONTENT, server_response_header, COLOR_NEUTRAL);
         }
 
-        else if (dot && !strcmp(dot, ".jpeg")) { //JPEG
+        else if (dot && !strcmp(dot, ".jpeg")) { //JPG
             server_response_header =
                     "HTTP/1.1 200 OK\r\n"
                     "Content-Type: image/jpeg\r\n\n";
 
             live("RESPONSE: \n%s%s%s\n", COLOR_CLIENT_CONTENT, server_response_header, COLOR_NEUTRAL);
         }
+
+        
         /* READ FILE CONTENTS */
         FILE *file = fopen(path, "rb");
 
@@ -157,21 +159,24 @@ void *connection_handler(void *socket_desc) {
                 live("Server response sent:\n%s%s%s", COLOR_SERVER_CONTENT, server_response, COLOR_NEUTRAL);
 
             free(server_response);
+            free(socket_desc);
             close(socket);
 
         } else {
             printf("%s[SERVER] ", COLOR_NEGATIVE);
             printf("%s%s\n", COLOR_NEUTRAL, "No such file or directory, skipped");
             free(socket_desc);
+
             close(socket);
         }
 
     } else {
         die("Reading client request failed");
         free(socket_desc);
+
         close(socket);
     }
 
-    free(socket_desc);
+
 
 }
