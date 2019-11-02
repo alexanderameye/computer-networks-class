@@ -10,8 +10,6 @@
 //gcc -o server server.c -lpthread
 
 //TODO: send not on same wifi working
-//TODO: multithreading support
-//TODO: login
 //TODO: jpg files
 
 void *connection_handler(void *);
@@ -72,7 +70,6 @@ int main(int argc, char const *argv[]) {
 
     while ((client_socket = accept(server_socket, (struct sockaddr *) &server_address,
                                    (socklen_t * ) & address_length))) {
-        live("Socket listening...");
 
         pthread_t sniffer_thread;
         client_sock = malloc(1);
@@ -82,7 +79,7 @@ int main(int argc, char const *argv[]) {
             die("Thread creation failed");
         else live("Connection thread created");
 
-
+        pthread_join(sniffer_thread, NULL);
     }
     return 0;
 }
@@ -123,6 +120,14 @@ void *connection_handler(void *socket_desc) {
 
             live("RESPONSE: \n%s%s%s\n", COLOR_CLIENT_CONTENT, server_response_header, COLOR_NEUTRAL);
         }
+
+        else if (dot && !strcmp(dot, ".jpeg")) { //JPEG
+            server_response_header =
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: image/jpeg\r\n\n";
+
+            live("RESPONSE: \n%s%s%s\n", COLOR_CLIENT_CONTENT, server_response_header, COLOR_NEUTRAL);
+        }
         /* READ FILE CONTENTS */
         FILE *file = fopen(path, "rb");
 
@@ -157,13 +162,16 @@ void *connection_handler(void *socket_desc) {
         } else {
             printf("%s[SERVER] ", COLOR_NEGATIVE);
             printf("%s%s\n", COLOR_NEUTRAL, "No such file or directory, skipped");
+            free(socket_desc);
             close(socket);
         }
 
     } else {
         die("Reading client request failed");
+        free(socket_desc);
         close(socket);
     }
 
+    free(socket_desc);
 
 }
