@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <time.h>
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -15,6 +16,7 @@
 #define HTML404 "<html><head> <title>404 Not Found</title> <style> html{ height: 100%; } body{ font-family: 'Segoe UI', sans-serif;; height: 100%; } .wrap { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #fafafa; } .login-form{ border: 1px solid #ddd; padding: 2rem; background: #ffffff; } .form-button{ background: #d95b52; border: 1px solid #ddd; color: #ffffff; padding: 10px; width: 100%;font-weight:bold; } .form-header{ text-align: center; margin-bottom : 1rem; } </style></head><body> <div class=\"wrap\"> <form class=\"login-form\"> <div class=\"form-header\"> <h3>404 Not Found</h3> </div> <button class=\"form-button\" onclick=\"location.href='/index.html'\" type=\"button\">Go Back</button> </form> </div></body></html>\r\n"
 #define HTML401 "<html><head> <title>401 Unauthorized</title> <style> html{ height: 100%; } body{ font-family: 'Segoe UI', sans-serif;; height: 100%; } .wrap { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #fafafa; } .login-form{ border: 1px solid #ddd; padding: 2rem; background: #ffffff; } .form-button{ background: #fcce03; border: 1px solid #ddd; color: #ffffff; padding: 10px; width: 100%;font-weight:bold; } .form-header{ text-align: center; margin-bottom : 1rem; } </style></head><body> <div class=\"wrap\"> <form class=\"login-form\"> <div class=\"form-header\"> <h3>401 Unauthorized</h3> </div> <button class=\"form-button\" onclick=\"location.href='/index.html'\" type=\"button\">Go Back</button> </form> </div></body></html>\r\n"
 #define HTML403 "<html><head> <title>403 Forbidden</title> <style> html{ height: 100%; } body{ font-family: 'Segoe UI', sans-serif;; height: 100%; } .wrap { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #fafafa; } .login-form{ border: 1px solid #ddd; padding: 2rem; background: #ffffff; } .form-button{ background: #7303fc; border: 1px solid #ddd; color: #ffffff; padding: 10px; width: 100%;font-weight:bold; } .form-header{ text-align: center; margin-bottom : 1rem; } </style></head><body> <div class=\"wrap\"> <form class=\"login-form\"> <div class=\"form-header\"> <h3>403 Forbidden</h3> </div> <button class=\"form-button\" onclick=\"location.href='/index.html'\" type=\"button\">Go Back</button> </form> </div></body></html>\r\n"
+#define HTMLCOOKIE "<html><head><title>COOKIE ALEXANDERAMEYE</title</head><body>5 seconds left</body></html>"
 
 void *handle_connection(void *);
 
@@ -89,6 +91,10 @@ void *handle_connection(void *client_socket) {
             if (ptr[strlen(ptr) - 1] == '/') strcat(ptr, "index.html"); // index.html is default
             strcpy(file_path, WEBROOT);
             strcat(file_path, ptr); // append request file to path
+
+
+            //GET COOKIE HERE, CHECK IF LOGGED IN
+
 
             if (logged_in) { /* LOGGED IN */
                 requested_file = open(file_path, O_RDONLY, 0); // open file
@@ -165,27 +171,37 @@ void *handle_connection(void *client_socket) {
             }
 
             if (strcmp(request_full, LOGIN) == 0) {
+
+                unsigned char cookie[BUFFER_SIZE];
+
+                time_t now = time(NULL) + 30;
+                struct tm *local = gmtime(&now);
+
+                strcpy(cookie, COOKIE);
+                printf("\nCOOKIE:%s\n", cookie);
+                strcpy(cookie, time_string(local));
+                strcpy(cookie, "\r\n\r\n");
+
+                printf("\nCOOKIE:%s\n", cookie);
+
                 logged_in = 1;
 
                 requested_file = open(".//secret.html", O_RDONLY, 0); // open file
                 live("Requested file:\n%s\t %s%s\n", COLOR_POSITIVE, ".//secret.html", COLOR_NEUTRAL);
 
-                if (requested_file == -1) {  /* 404 NOT FOUND */
-                    live("Response:\n%s\t %s%s\n", COLOR_NEGATIVE, "404 Not Found", COLOR_NEUTRAL);
-                    send_string(socket, "HTTP/1.1 404 NOT FOUND\r\n\r\n");
-                    send_string(socket, HTML404);
-                } else {  /* 200 OK */
-                    live("Response:\n%s\t %s%s\n", COLOR_POSITIVE, "200 OK", COLOR_NEUTRAL);
-                    send_string(socket, "HTTP/1.0 200 OK\r\n\r\n");
+                live("Response:\n%s\t %s%s\n", COLOR_POSITIVE, "200 OK", COLOR_NEUTRAL);
+                send_string(socket, "HTTP/1.0 200 OK\r\n");
 
-                    if ((file_size = get_file_size(requested_file)) == -1) die("Failed getting file size");
-                    if ((ptr = (unsigned char *) malloc(file_size)) == NULL)
-                        die("Failed allocating memory for reading");
-                    read(requested_file, ptr, file_size); //if you print ptr here you get html body
-                    send(socket, ptr, file_size, 0);
-                    free(ptr);
-                    close(requested_file);
-                }
+                send_string(socket, cookie);
+
+                if ((file_size = get_file_size(requested_file)) == -1) die("Failed getting file size");
+                if ((ptr = (unsigned char *) malloc(file_size)) == NULL)
+                    die("Failed allocating memory for reading");
+                read(requested_file, ptr, file_size); //if you print ptr here you get html body
+                send(socket, ptr, file_size, 0);
+                free(ptr);
+                close(requested_file);
+
 
             } else // FORBIDDEN ALWAYS IF NOT LOGGED IN EVEN IF NON EXISTENT PAGE
             {

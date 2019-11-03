@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 #include <stdarg.h>
 #include <sys/stat.h>
-
+#include <time.h>
 /* SERVER */
 #define WEBROOT "./"
 #define SERVER_PORT 10080 // standard HTTP port
@@ -23,7 +23,7 @@
 
 /* AUTHENTICATION */
 #define LOGIN "username=alexanderameye&password=paswoord123"
-
+#define COOKIE "Set-Cookie: session_id=logged_in; Expires="
 
 /* COLORS */
 #define COLOR_ACTION "\033[1;33m"
@@ -51,6 +51,29 @@ int recv_line(int socket, unsigned char *request_header) {
         ptr++;
     }
     return 0;
+}
+
+//Expires=Wed, 21 Oct 2015 07:28:00 GMT
+//Expires=Mon, 4 Nov 2019 06:36:00 GMT
+char *time_string(const struct tm *timeptr) {
+    static char wday_name[7][3] = {
+            "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+    };
+    static char mon_name[12][3] = {
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    };
+    static char result[31];
+
+    sprintf(result, "%.3s, %d %.3s %d %.2d:%.2d:%.2d GMT\n",
+            wday_name[timeptr->tm_wday], //SUN
+            timeptr->tm_mday, //4
+            mon_name[timeptr->tm_mon], //NOV
+            1900 + timeptr->tm_year, //2019
+            timeptr->tm_hour, //HOUR
+            timeptr->tm_min, //MIN
+            timeptr->tm_sec); //ADD 30 SECONDS
+    return result;
 }
 
 int send_string(int socket, unsigned char *buffer) {
