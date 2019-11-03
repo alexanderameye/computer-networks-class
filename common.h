@@ -26,6 +26,7 @@
 
 /* AUTHENTICATION */
 #define LOGIN "username=alexanderameye&password=paswoord123"
+#define USERNAME "alexanderameye"
 #define COOKIE "Set-Cookie: logged_in=true; Expires="
 #define SESSION_TIME 20
 

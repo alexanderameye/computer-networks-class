@@ -110,14 +110,18 @@ void *handle_connection(void *client_socket) {
                     live("Response:\n%s\t %s%s\n", COLOR_POSITIVE, "200 OK", COLOR_NEUTRAL);
                     send_string(socket, "HTTP/1.1 200 OK\r\n\r\n");
                     char cookie_info[BUFFER_SIZE];
-                    strcpy(cookie_info, "<html><head><title>Cookie alexanderameye</title></head><body><p>");
+                    strcpy(cookie_info, "<html><head><title>Cookie ");
+                    strcat(cookie_info, USERNAME);
+                    strcat(cookie_info, "</title></head><body><p>");
+                    strcat(cookie_info, USERNAME);
+                    strcat(cookie_info, " ");
+
                     char buffer[BUFFER_SIZE];
 
                     time_t current = time(NULL);
                     double remaining = difftime(end, current);
 
-
-                    sprintf(buffer, "%f", remaining);
+                    sprintf(buffer, "%d", (int) remaining);
                     strcat(cookie_info, buffer);
                     strcat(cookie_info, " seconds left</p></body></html>");
                     send_string(socket, cookie_info);
