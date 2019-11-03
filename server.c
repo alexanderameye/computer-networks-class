@@ -85,7 +85,6 @@ void *handle_connection(void *client_socket) {
 
         /* GET REQUEST */
         if (strncmp(request, "GET ", 4) == 0) {
-
             ptr = request + 4;
             if (ptr[strlen(ptr) - 1] == '/') strcat(ptr, "index.html"); // index.html is default
             strcpy(file_path, WEBROOT);
@@ -154,14 +153,51 @@ void *handle_connection(void *client_socket) {
         else if (strncmp(request, "POST ", 5) == 0) {
             ptr = request + 5; //checks if POST is present
 
+            if (ptr[strlen(ptr) - 1] == '/') strcat(ptr, "index.html"); // index.html is default
+            strcpy(file_path, WEBROOT);
+            strcat(file_path, ptr); // append request file to path
+
+            unsigned char username[BUFFER_SIZE];
+            unsigned char password[BUFFER_SIZE];
+            get_username(socket, password);
+            get_password(socket, password);
 
 
-            //TODO: read input data so username + password
-            //TODO: if matches username and password that's correct? logged_in = true + server secret.html
-            //TODO:
+            if(strcmp(username, USERNAME) && strcmp(password, PASSWORD))
+            {
+                logged_in = 1;
 
-            
-            live("POST");
+                requested_file = open(".//secret.html", O_RDONLY, 0); // open file
+                live("Requested file:\n%s\t %s%s\n", COLOR_POSITIVE, ".//secret.html", COLOR_NEUTRAL);
+
+                if (requested_file == -1) {  /* 404 NOT FOUND */
+                    live("Response:\n%s\t %s%s\n", COLOR_NEGATIVE, "404 Not Found", COLOR_NEUTRAL);
+                    send_string(socket, "HTTP/1.1 404 NOT FOUND\r\n\r\n");
+                    send_string(socket, HTML404);
+                } else {  /* 200 OK */
+                    live("Response:\n%s\t %s%s\n", COLOR_POSITIVE, "200 OK", COLOR_NEUTRAL);
+                    send_string(socket, "HTTP/1.0 200 OK\r\n\r\n");
+                    if (ptr == request + 4) { // GET Request
+                        if ((file_size = get_file_size(requested_file)) == -1) die("Failed getting file size");
+                        if ((ptr = (unsigned char *) malloc(file_size)) == NULL)
+                            die("Failed allocating memory for reading");
+                        read(requested_file, ptr, file_size);
+                        send(socket, ptr, file_size, 0);
+                        free(ptr);
+                    }
+                    close(requested_file);
+                }
+
+            }
+
+            else // FORBIDDEN ALWAYS IF NOT LOGGED IN EVEN IF NON EXISTENT PAGE
+            {
+                live("Response:\n%s\t %s%s\n", COLOR_NEGATIVE, "401 Unauthorized", COLOR_NEUTRAL);
+                send_string(socket, "HTTP/1.1 401 Unauthorized\r\n\r\n");
+                send_string(socket, HTML401);
+            }
+
+
         } else die("Unknown request");
 
 
