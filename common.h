@@ -15,11 +15,10 @@
 #define WEBROOT "./"
 #define SERVER_PORT 10080 // standard HTTP port
 #define BUFFER_SIZE 4096
-#define MAX_CONNECTIONS 5
+#define MAX_CONNECTIONS 100
 #define SOCKET_TYPE SOCK_STREAM // Connection oriented TCP Protocol
 #define SOCKET_DOMAIN AF_INET // IP version 4 Address Family (IPv4)
 #define SOCKET_PROTOCOL 0 // IP Protocol
-#define IP_ADDRESS "127.0.0.1" // localhost
 
 #define TRUE 1
 #define FALSE 0
