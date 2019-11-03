@@ -160,36 +160,9 @@ void *handle_connection(void *client_socket) {
             long value_read;
             if ((value_read = read(socket, request_full, BUFFER_SIZE)) >= 0) {
 
-                printf("Read successful: %s\n", request_full);
+                live("Entered credentials:\n%s\t %s%s\n", COLOR_POSITIVE, request_full, COLOR_NEUTRAL);
+                live("Expected credentials:\n%s\t %s%s\n", COLOR_POSITIVE, LOGIN, COLOR_NEUTRAL);
             }
-
-
-
-
-            /*   const char *s = request_full;
-               const char *PATTERN1 = "username=";
-               const char *PATTERN2 = "&password=";
-               const char *PATTERN3 = "\r\n";
-
-               char *username = NULL;
-               char *password = NULL;
-
-               char *start, *end;
-
-               if (start = strstr(s, PATTERN1)) {
-                   start += strlen(PATTERN1);
-                   if (end = strstr(start, PATTERN2)) {
-                       username = (char *) malloc(end - start + 1);
-                       memcpy(username, start, end - start);
-                       username[end - start] = '\0';
-                   }
-               }
-
-
-               if (username) printf("USERNAME: %s\n", username);
-               if (password) printf("PASSWORD: %s\n", password);*/
-
-            //strcmp(username, USERNAME) && strcmp(password, PASSWORD)
 
             if (strcmp(request_full, LOGIN) == 0) {
                 logged_in = 1;
