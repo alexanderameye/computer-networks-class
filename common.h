@@ -21,9 +21,13 @@
 #define SOCKET_PROTOCOL 0 // IP Protocol
 #define IP_ADDRESS "127.0.0.1" // localhost
 
+#define TRUE 1
+#define FALSE 0
+
 /* AUTHENTICATION */
 #define LOGIN "username=alexanderameye&password=paswoord123"
-#define COOKIE "Set-Cookie: session_id=logged_in; Expires="
+#define COOKIE "Set-Cookie: logged_in=true; Expires="
+#define SESSION_TIME 20
 
 /* COLORS */
 #define COLOR_ACTION "\033[1;33m"
@@ -65,7 +69,7 @@ char *time_string(const struct tm *timeptr) {
     };
     static char result[31];
 
-    sprintf(result, "%.3s, %d %.3s %d %.2d:%.2d:%.2d GMT\n",
+    sprintf(result, "%.3s, %d %.3s %d %.2d:%.2d:%.2d GMT",
             wday_name[timeptr->tm_wday], //SUN
             timeptr->tm_mday, //4
             mon_name[timeptr->tm_mon], //NOV
