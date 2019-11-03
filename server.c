@@ -81,8 +81,6 @@ void *handle_connection(void *client_socket) {
     if (strstr(request_header, "Cookie: logged_in=true") != NULL) logged_in = TRUE;
     else logged_in = FALSE;
 
-    printf("\nLOGIN STATUS: %d\n", logged_in);
-
     /* PARSE REQUEST HEADER */
     unsigned char *ptr;
     unsigned char file_path[BUFFER_SIZE];
@@ -96,16 +94,15 @@ void *handle_connection(void *client_socket) {
         if (strncmp(request_header, "GET ", 4) == 0) { /* GET */
             ptr = request_header + 4;
 
-            if (logged_in) {
-                if (ptr[strlen(ptr) - 1] == '/') strcat(ptr, "secret.html"); //logged in so secret is default
-                strcpy(file_path, WEBROOT);
+            if (logged_in) { /* ALREADY LOGGED IN */
+                if (ptr[strlen(ptr) - 1] == '/') strcat(ptr, "secret.html"); // when logged in, default to secret.html
+                strcpy(file_path, WEB_ROOT);
                 strcat(file_path, ptr);
 
-
-                requested_file = open(file_path, O_RDONLY, 0); // open file
+                requested_file = open(file_path, O_RDONLY, 0);
                 live("Requested file:\n%s\t %s%s\n", COLOR_POSITIVE, file_path, COLOR_NEUTRAL);
 
-                if (strcmp(ptr, "/cookie.html") == 0) //COOKIE FILE
+                if (strcmp(ptr, "/cookie.html") == 0) /* SPECIAL CASE WHERE COOKIE FILE IS REQUESTED */
                 {
                     live("Response:\n%s\t %s%s\n", COLOR_POSITIVE, "200 OK", COLOR_NEUTRAL);
                     send_string(socket, "HTTP/1.1 200 OK\r\n\r\n");
@@ -115,14 +112,11 @@ void *handle_connection(void *client_socket) {
                     strcat(cookie_info, "</title></head><body><p>");
                     strcat(cookie_info, USERNAME);
                     strcat(cookie_info, " ");
-
-                    char buffer[BUFFER_SIZE];
-
+                    char time_remaining[BUFFER_SIZE];
                     time_t current = time(NULL);
-                    double remaining = difftime(end, current);
-
-                    sprintf(buffer, "%d", (int) remaining);
-                    strcat(cookie_info, buffer);
+                    double remaining_time = difftime(end, current);
+                    sprintf(time_remaining, "%d", (int) remaining_time);
+                    strcat(cookie_info, time_remaining);
                     strcat(cookie_info, " seconds left</p></body></html>");
                     send_string(socket, cookie_info);
                 } else if (requested_file == -1) { /* 404 NOT FOUND */
@@ -132,7 +126,7 @@ void *handle_connection(void *client_socket) {
                 } else { /* 200 OK */
                     live("Response:\n%s\t %s%s\n", COLOR_POSITIVE, "200 OK", COLOR_NEUTRAL);
                     send_string(socket, "HTTP/1.1 200 OK\r\n\r\n");
-                    if (ptr == request_header + 4) { // GET Request
+                    if (ptr == request_header + 4) {
                         if ((file_size = get_file_size(requested_file)) == -1) die("Failed getting file size");
                         if ((ptr = (unsigned char *) malloc(file_size)) == NULL)
                             die("Failed allocating memory for reading");
@@ -142,13 +136,12 @@ void *handle_connection(void *client_socket) {
                     }
                     close(requested_file);
                 }
-            } else { /* NOT LOGGED IN */
-                if (ptr[strlen(ptr) - 1] == '/') strcat(ptr, "index.html"); //not logged in so loginpage is default
-                strcpy(file_path, WEBROOT);
+            } else { /* NOT LOGGED IN YET */
+                if (ptr[strlen(ptr) - 1] == '/') strcat(ptr, "index.html"); // when logged in yet, default to index.html
+                strcpy(file_path, WEB_ROOT);
                 strcat(file_path, ptr);
 
-
-                if (strcmp(ptr, "/index.html") == 0) // ONLY ALLOWED ACCESS
+                if (strcmp(ptr, "/index.html") == 0) /* SPECIAL CASE WHERE LOGIN FILE IS REQUESTED, ALLOWED! */
                 {
                     requested_file = open(file_path, O_RDONLY, 0); // open file
                     live("Requested file:\n%s\t %s%s\n", COLOR_POSITIVE, file_path, COLOR_NEUTRAL);
@@ -182,7 +175,7 @@ void *handle_connection(void *client_socket) {
 
             if (logged_in) {
                 if (ptr[strlen(ptr) - 1] == '/') strcat(ptr, "secret.html"); //logged in so secret is default
-                strcpy(file_path, WEBROOT);
+                strcpy(file_path, WEB_ROOT);
                 strcat(file_path, ptr);
 
                 requested_file = open(file_path, O_RDONLY, 0); // open file
@@ -218,7 +211,7 @@ void *handle_connection(void *client_socket) {
                 if (strcmp(request_full, LOGIN) == 0) { //LOGIN CORRECT
 
                     if (ptr[strlen(ptr) - 1] == '/') strcat(ptr, "secret.html");
-                    strcpy(file_path, WEBROOT);
+                    strcpy(file_path, WEB_ROOT);
                     strcat(file_path, ptr);
 
                     unsigned char cookie[BUFFER_SIZE];
@@ -231,7 +224,7 @@ void *handle_connection(void *client_socket) {
                     strcat(cookie, time_string(local));
 
                     if (ptr[strlen(ptr) - 1] == '/') strcat(ptr, "secret.html"); //logged in so secret is default
-                    strcpy(file_path, WEBROOT);
+                    strcpy(file_path, WEB_ROOT);
                     strcat(file_path, ptr);
 
                     requested_file = open(file_path, O_RDONLY, 0); // open file

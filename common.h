@@ -35,7 +35,7 @@
 #define COLOR_SERVER_CONTENT "\033[1;36m"
 #define COLOR_NEUTRAL "\033[0m"
 #define COLOR_NEGATIVE "\033[1;31m"
-#define COLOR_POSITIVE "
+#define COLOR_POSITIVE "\033[0;32m"
 
 /* Read the first line of the sent request and returns it */
 int recv_line(int socket, unsigned char *request_header) {
@@ -70,7 +70,7 @@ char *time_string(const struct tm *timeptr) {
 
     sprintf(result, "%.3s, %d %.3s %d %.2d:%.2d:%.2d GMT",
             wday_name[timeptr->tm_wday],
-            timeptr->tm_mday, /
+            timeptr->tm_mday,
             mon_name[timeptr->tm_mon],
             1900 + timeptr->tm_year,
             timeptr->tm_hour,
