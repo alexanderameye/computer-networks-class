@@ -106,19 +106,18 @@ void *handle_connection(void *client_socket) {
                 {
                     live("Response:\n%s\t %s%s\n", COLOR_POSITIVE, "200 OK", COLOR_NEUTRAL);
                     send_string(socket, "HTTP/1.1 200 OK\r\n\r\n");
-                    char cookie_info[BUFFER_SIZE];
-                    strcpy(cookie_info, "<html><head><title>Cookie ");
-                    strcat(cookie_info, USERNAME);
-                    strcat(cookie_info, "</title></head><body><p>");
-                    strcat(cookie_info, USERNAME);
-                    strcat(cookie_info, " ");
-                    char time_remaining[BUFFER_SIZE];
-                    time_t current = time(NULL);
-                    double remaining_time = difftime(end, current);
-                    sprintf(time_remaining, "%d", (int) remaining_time);
-                    strcat(cookie_info, time_remaining);
-                    strcat(cookie_info, " seconds left</p></body></html>");
-                    send_string(socket, cookie_info);
+                    if (ptr == request_header + 4) {
+                        char cookie_info[110];
+                        strcpy(cookie_info,
+                               "<html><head><title>Cookie alexanderameye</title></head><body><p>alexanderameye ");
+                        char time_remaining[12];
+                        time_t current = time(NULL);
+                        double remaining_time = difftime(end, current);
+                        sprintf(time_remaining, "%d", (int) remaining_time);
+                        strcat(cookie_info, time_remaining);
+                        strcat(cookie_info, " seconds left</p></body></html>");
+                        send_string(socket, cookie_info);
+                    }
                 } else if (requested_file == -1) { /* 404 NOT FOUND */
                     live("Response:\n%s\t %s%s\n", COLOR_NEGATIVE, "404 Not Found", COLOR_NEUTRAL);
                     send_string(socket, "HTTP/1.1 404 NOT FOUND\r\n\r\n");
@@ -153,7 +152,7 @@ void *handle_connection(void *client_socket) {
                     } else {  /* 200 OK */
                         live("Response:\n%s\t %s%s\n", COLOR_POSITIVE, "200 OK", COLOR_NEUTRAL);
                         send_string(socket, "HTTP/1.1 200 OK\r\n\r\n");
-                        if (ptr == request_header + 4) { // GET Request
+                        if (ptr == request_header + 4) {
                             if ((file_size = get_file_size(requested_file)) == -1) die("Failed getting file size");
                             if ((ptr = (unsigned char *) malloc(file_size)) == NULL)
                                 die("Failed allocating memory for reading");
@@ -163,7 +162,7 @@ void *handle_connection(void *client_socket) {
                         }
                         close(requested_file);
                     }
-                } else // FORBIDDEN ALWAYS IF NOT LOGGED IN EVEN IF NON EXISTENT PAGE
+                } else /* ALL OTHER FILES FORBIDDEN */
                 {
                     live("Response:\n%s\t %s%s\n", COLOR_NEGATIVE, "403 Forbidden", COLOR_NEUTRAL);
                     send_string(socket, "HTTP/1.1 403 FORBIDDEN\r\n\r\n");
@@ -201,12 +200,15 @@ void *handle_connection(void *client_socket) {
             } else { //NOT LOGGED IN
                 unsigned char request_full[BUFFER_SIZE];
 
+                //ISSUE: when going from logged in to not logged in
+
                 long value_read;
                 if ((value_read = read(socket, request_full, BUFFER_SIZE)) >= 0) {
 
                     live("Entered credentials:\n%s\t %s%s\n", COLOR_POSITIVE, request_full, COLOR_NEUTRAL);
                     live("Expected credentials:\n%s\t %s%s\n", COLOR_POSITIVE, LOGIN, COLOR_NEUTRAL);
                 }
+
 
                 if (strcmp(request_full, LOGIN) == 0) { //LOGIN CORRECT
 
@@ -237,7 +239,6 @@ void *handle_connection(void *client_socket) {
                     } else { /* 200 OK */
                         live("Response:\n%s\t %s%s\n", COLOR_POSITIVE, "200 OK", COLOR_NEUTRAL);
                         send_string(socket, "HTTP/1.1 200 OK\r\n");
-                        printf("\nCOOKIE:%s\n", cookie);
                         send_string(socket, cookie);
                         send_string(socket, "\r\n\r\n");
 
