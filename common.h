@@ -22,8 +22,8 @@
 #define IP_ADDRESS "127.0.0.1" // localhost
 
 /* AUTHENTICATION */
-#define USERNAME "alexanderameye"
-#define PASSWORD "paswoord123"
+#define LOGIN "username=alexanderameye&password=paswoord123"
+
 
 /* COLORS */
 #define COLOR_ACTION "\033[1;33m"
@@ -33,83 +33,25 @@
 #define COLOR_POSITIVE "\033[0;32m"
 #define COLOR_CLIENT_CONTENT "\033[1;35m"
 
-
-int recv_line(int socket, unsigned char *dest_buffer) {
+int recv_line(int socket, unsigned char *request_header) {
 
 #define EOL "\r\n\r\n" // detects end of line, can be limited to \r\n
 #define EOL_SIZE 4
     unsigned char *ptr; // used to traverse the line
     int eol_matched = 0;
-    ptr = dest_buffer;
+    ptr = request_header;
     while (recv(socket, ptr, 1, 0) == 1) { // read a single byte
         if (*ptr == EOL[eol_matched]) { // check if byte matches and EOL character
             eol_matched++;
             if (eol_matched == EOL_SIZE) { // check if all bytes match EOL
                 *(ptr + 1 - EOL_SIZE) = '\0'; // terminate string
-                return strlen(dest_buffer); // return received bytes
+                return strlen(request_header); // return received bytes
             }
         } else eol_matched = 0;
         ptr++;
     }
     return 0;
 }
-
-void get_password(int socket, unsigned char *destination_buffer) {
-
-    long value_read;
-    char request[BUFFER_SIZE];
-
-    if ((value_read = read(socket, request, BUFFER_SIZE)) >= 0) {
-        const char *s = request;
-        const char *PATTERN1 = "&password=";
-        const char *PATTERN2 = " ";
-
-        char *target = NULL;
-        char *start, *end;
-
-        if (start = strstr(s, PATTERN1)) {
-            start += strlen(PATTERN1);
-            if (end = strstr(start, PATTERN2)) {
-                target = (char *) malloc(end - start + 1);
-                memcpy(target, start, end - start);
-                target[end - start] = '\0';
-            }
-        }
-
-        if (target) printf("PASSWORD: %s\n", target);
-
-        free(target);
-    }
-}
-
-void get_username(int socket, unsigned char *destination_buffer) {
-    long value_read;
-    char request[BUFFER_SIZE];
-
-    if ((value_read = read(socket, request, BUFFER_SIZE)) >= 0) {
-        const char *s = request;
-        const char *PATTERN1 = "username=";
-        const char *PATTERN2 = "&password=";
-
-        char *target = NULL;
-        char *start, *end;
-
-        if (start = strstr(s, PATTERN1)) {
-            start += strlen(PATTERN1);
-            if (end = strstr(start, PATTERN2)) {
-                target = (char *) malloc(end - start + 1);
-                memcpy(target, start, end - start);
-                target[end - start] = '\0';
-            }
-        }
-
-        if (target) printf("USERNAME: %s\n", target);
-
-        free(target);
-    }
-
-}
-
 
 int send_string(int socket, unsigned char *buffer) {
     int sent;
