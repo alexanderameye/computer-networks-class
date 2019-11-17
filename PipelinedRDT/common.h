@@ -13,23 +13,24 @@
 
 #define MAXBUFFERLENGTH 100
 
+
+
+#define RECEIVER_IP "127.0.0.1"
+
+
+
 #define MAX_CONNECTIONS 100
 #define TRUE 1
 #define FALSE 0
 
-typedef enum
-{
-    REQUEST,
+typedef enum {
     DATA,
-    ACK,
-    FIN
+    ACK
 } packet_t;
 
-struct packet
-{
+struct packet {
     packet_t type;
     int sequence_number;
-    int corrupt;
     int length;
     int total_length;
     char data[PACKETSIZE];
@@ -57,6 +58,12 @@ void die(char *message, ...) {
     exit(1);
 }
 
+typedef enum {
+    SENDER,
+    RECEIVER
+} sender_t;
+
+
 /* Logs a success or neutral message to the terminal */
 void live(char *message, ...) {
     va_list ap;
@@ -69,8 +76,7 @@ void live(char *message, ...) {
     va_end(ap);
 }
 
-void usage_error()
-{
+void usage_error() {
     fprintf(stdout, "CORRECT USAGE\n");
     fprintf(stdout, "---------------------------------------------------\n");
     fprintf(stdout, "Sender:   ./sender RECEIVER_IP TIMEOUT WINDOW_SIZE\n");
