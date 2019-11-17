@@ -3,104 +3,93 @@
 #include "common.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/time.h>
 #include <string.h>
-#include <unistd.h>
+
+void serve(int port);
+
+int sender_socket, receiver_socket;
+char *buffer; //holds data of sent file
+int timeout, window_size;
+struct sockaddr_in sender_address, receiver_address;
+char *receiver_ip_address;
+
+char filename[150];
+long file_length = 0;
+
+
+int total_number_of_packets = -1;
 
 int main(int argc, char *argv[]) {
-    if (argc != 4) {
-        fprintf(stderr,"usage: %s ip timeout windowsize\n",argv[0]);
-        exit(1);
-    }
+    if (argc != 4) usage_error();
 
-    /* VARIABLES */
-    int sender_socket, receiver_socket;
-    struct sockaddr_in sender_address, receiver_address;
-    char buffer[MAXBUFFERLENGTH];
+    /* PARSE COMMAND LINE ARGUMENTS */
+    receiver_ip_address = argv[1];
+    timeout = atoi(argv[2]);
+    window_size = atoi(argv[3]);
 
-    int addr_len, numbytes;
-    struct timeval time;
-    struct timezone zone;
-
-    char *receiver_ip_address = argv[1];
-    int timeout = atoi(argv[2]);
-    int window_size = atoi(argv[3]);
-
-    char *hello = "Hello from server";
-
-    printf("%s[PROGRAM EXECUTION]\nIP: %s%s\n%sTIMEOUT: %s%d\n%sWINDOW SIZE: %s%d\n%sPORT NUMBER: %s10080\n\n", COLOR_SERVER_CONTENT, COLOR_NEUTRAL, receiver_ip_address, COLOR_SERVER_CONTENT, COLOR_NEUTRAL, timeout, COLOR_SERVER_CONTENT, COLOR_NEUTRAL,
+    printf("%s[PROGRAM EXECUTION]\nRECEIVER IP: %s%s\n%sTIMEOUT: %s%d\n%sWINDOW SIZE: %s%d\n%sPORT NUMBER: %s10080\n\n",
+           COLOR_SERVER_CONTENT, COLOR_NEUTRAL, receiver_ip_address, COLOR_SERVER_CONTENT, COLOR_NEUTRAL, timeout,
+           COLOR_SERVER_CONTENT, COLOR_NEUTRAL,
            window_size, COLOR_SERVER_CONTENT, COLOR_NEUTRAL);
 
+    serve(PORT);
+}
+
+
+void serve(int port) {
+    /* VARIABLES */
+    socklen_t receiver_address_length;
 
     /* CREATE SENDER SOCKET */
     if ((sender_socket = socket(SOCKET_DOMAIN, SOCKET_TYPE, SOCKET_PROTOCOL)) == -1) die("Socket creation failed");
     else live("Socket created");
 
-    /* ALLOWS US TO RERUN SERVER IMMEDIATELY AFTER WE KILL IT */
+    /* ALLOW US TO RERUN SERVER IMMEDIATELY AFTER KILLING IT */
     setsockopt(sender_socket, SOL_SOCKET, SO_REUSEADDR,
-               (const void *)1, sizeof(int));
+               (const void *) 1, sizeof(int));
 
-    /* BUILD SENDER ADDRESS */
+    /* SET UP ADDRESS */
+    memset((char *) &sender_address, 0, sizeof(sender_address));
     sender_address.sin_family = SOCKET_DOMAIN;
-    sender_address.sin_addr.s_addr = INADDR_ANY; //inet_addr(receiver_ip_address); //only accept 1 IP
-    sender_address.sin_port = htons(PORT);
-    memset(&(sender_address.sin_zero), '\0', sizeof(sender_address.sin_zero));
+    sender_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    sender_address.sin_port = htons(port);
 
     /* BIND PORT NUMBER TO SENDER SOCKET */
     if (bind(sender_socket, (struct sockaddr *) &sender_address, sizeof(sender_address)) == -1)
         die("Socket bind failed");
-    else live("Socket bound");
+    else live("Socket bound\n");
+
+
+
+    /* OPEN FILE */
+    printf("File name: ");
+    scanf("%s", filename);
+    FILE *file;
+    printf("%s", filename);
+    file = fopen(filename, "rb");
+    if(!file) die("File not found");
+
+    /* READ FILE */
+    fseek(file, 0, SEEK_END);
+    file_length = ftell(file);
+    rewind(file);
+    buffer = (char *)malloc((file_length)*sizeof(char));
+    if(!buffer) die("File too large to fit into memory");
+    fread(buffer, file_length, 1, file);
+    fclose(file);
+    printf("File read, %ld bytes.\n", file_length);
+
+    /* DIVIDE FILE INTO PACKETS */
+    total_number_of_packets = ((file_length-1)/PACKETSIZE) +1;
+    printf("File will be divided into %d packets of %d bytes and 1 packet of %ld bytes.\n", total_number_of_packets-1, PACKETSIZE, (file_length)-((total_number_of_packets-1) * PACKETSIZE));
 
 
 
 
 
-    /* WAIT FOR DATAGRAMS */
-    printf("Before the loop \n");
-    addr_len = sizeof(struct sockaddr);
-
-    if (gettimeofday(&time,&zone) < 0 ){
-        perror("bind");
-        exit(1);
-    };
-    if ((numbytes=recvfrom(sender_socket, buffer, MAXBUFFERLENGTH, 0, \
-                            (struct sockaddr *)&receiver_address, &addr_len)) == -1) {
-        perror("recvfrom");
-        exit(1);
-    }
-
-    printf(" After first packet - Time= %ld and %ld \n",time.tv_sec, time.tv_usec);
-
-    for (int i=1;i<=100;i++){
-        if ((numbytes=recvfrom(sender_socket, buffer, MAXBUFFERLENGTH, 0, \
-               	            (struct sockaddr *)&receiver_address, &addr_len)) == -1) {
-            perror("recvfrom");
-            exit(1);
-        }
-        if (gettimeofday(&time,&zone) < 0 ){
-            perror("bind");
-            exit(1);
-        };
-        printf("Time= %ld and %ld ",time.tv_sec, time.tv_usec);
-
-        printf("got packet %d from %s ",i,inet_ntoa(receiver_address.sin_addr));
-        printf("packet is %d bytes long ",numbytes);
-        buffer[numbytes] = '\0';
-        printf("packet contains \"%s\"\n",buffer);
-    }
 
 
-    if (gettimeofday(&time,&zone) < 0 ){
-        perror("bind");
-        exit(1);
-    };
-    printf("Time= %ld and %ld \n",time.tv_sec, time.tv_usec);
 
-    printf("got packet from %s\n",inet_ntoa(receiver_address.sin_addr));
-    printf("packet is %d bytes long\n",numbytes);
-    buffer[numbytes] = '\0';
-    printf("packet contains \"%s\"\n",buffer);
+    receiver_address_length = sizeof(struct sockaddr);
 
-    close(sender_socket);
 }
