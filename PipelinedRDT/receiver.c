@@ -5,44 +5,109 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 /* FUNCTIONS */
 void init(int argc, char *argv[]);
 
 void initialize_receiver_socket();
 
-/* PACKETS */
-double packet_loss_probability;
-char *file_buffer = NULL;
+void transmission_done();
 
-/* SENDER AND RECEIVER INFO */
-int receiver_socket;
-struct sockaddr_in receiver_address, sender_address;
+void write_file_to_disk();
+
+/* PACKET LOSS */
+double packet_loss_probability;
+int packet_was_lost = 0;
+int loss_count = 0;
 
 /* SENDING AND RECEIVING */
-struct packet received_data, sent_data;
-int bytes_read;
+int receiver_socket;
+struct sockaddr_in receiver_address, sender_address;
+struct packet received_data, send_data;
+int bytes_read, bytes_sent;
+long expected_packet = 0;
+socklen_t addr_size = sizeof(struct sockaddr);
 
-socklen_t addr_size;
+/* FILE*/
+char *file_buffer = NULL;
+FILE *file;
+long buffer_size = 0;
 
 int main(int argc, char *argv[]) {
     init(argc, argv);
     initialize_receiver_socket();
 
-
-    addr_size = sizeof(struct sockaddr);
-
     while (1) {
+        /* RECEIVE */
         bytes_read = recvfrom(receiver_socket, &received_data, sizeof(struct packet), 0,
                               (struct sockaddr *) &sender_address, &addr_size);
-        char filename[150];
-        strcpy(filename, received_data.data);
-        printf("The file %s will be sent\n", filename);
+
+        packet_was_lost = random_loss(packet_loss_probability, &loss_count);
+        if (packet_was_lost) {
+            printf("\n%sPACKET LOST%s\n", COLOR_NEGATIVE, COLOR_NEUTRAL);
+            continue;
+        }
+        print_packet_info_receiver(&received_data, RECEIVING);
+
+        /* transmission done */
+        if (received_data.type == FINAL) {
+            transmission_done();
+            return 0;
+        }
+        if (!file_buffer) {
+            buffer_size = sizeof(char) * received_data.total_length;
+            file_buffer = (char *) malloc(buffer_size);
+            if (!file_buffer) die("Not enough space for client file buffer.");
+        }
+
+        /* SEND ACKNOWLEDGEMENT */
+        memset(&send_data, 0, sizeof(struct packet));
+        send_data.type = ACK;
+        send_data.length = 0; // ack has no length
+        if (received_data.sequence_number <= expected_packet) {
+            memcpy(file_buffer + received_data.sequence_number, received_data.data, received_data.length);
+            //send_data.sequence_number = received_data.sequence_number + PACKETSIZE;
+            send_data.sequence_number = received_data.sequence_number; //regular ack, no issue
+            expected_packet = send_data.sequence_number + PACKETSIZE; //expect next package
+            sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
+                   sizeof(struct sockaddr));
+            print_packet_info_receiver(&send_data, SENDING);
+        } else { // after a lost packet
+            send_data.sequence_number = expected_packet;
+            sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
+                   sizeof(struct sockaddr));
+            print_packet_info_receiver(&send_data, SENDING);
+        }
+
     }
+}
+
+/* send a FINAL packet to the sender acknowledging the transmission was completed*/
+void transmission_done() {
+    memset(&send_data, 0, sizeof(struct packet));
+    send_data.type = FINAL;
+    send_data.sequence_number = 0;
+    send_data.length = 0;
+    live("File transmission completed");
+    printf("Treated %s%d%s packets as lost\n", COLOR_NUMBER, loss_count, COLOR_NEUTRAL);
+    bytes_sent = sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &receiver_address,
+                        sizeof(struct sockaddr));
+    write_file_to_disk();
+}
+
+/* write the received packets to a file on the disk */
+void write_file_to_disk() {
+    file = fopen("text2", "wb");
+    if (file) {
+        fwrite(file_buffer, buffer_size, 1, file);
+        live("File written");
+    } else die("Error writing file");
 }
 
 /* Parses command line arguments */
 void init(int argc, char *argv[]) {
+    srand48(time(NULL));
     if (argc != 2) usage_error();
     packet_loss_probability = atof(argv[1]);
     printf("\n%s=================================", COLOR_ACTION);

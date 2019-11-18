@@ -68,7 +68,18 @@ int packet_header_size() {
     return sizeof(struct packet) - PACKETSIZE; // Minus the 512 bytes of data
 }
 
-void print_packet_info(const struct packet *packet, action type) {
+
+int random_loss(const double probability, int *counter) {
+    double random = drand48(); //generate random double [0.0, 1.0]
+    if (random >= probability) return 0;
+    else {
+        *counter = *counter + 1;
+        return 1;
+    }
+}
+
+
+void print_packet_info_sender(const struct packet *packet, action type) {
     if (type == SENDING) {
         printf("%sSender:%s Sending packet with sequence number %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
                packet->sequence_number, COLOR_NEUTRAL);
@@ -78,6 +89,22 @@ void print_packet_info(const struct packet *packet, action type) {
         printf("\n");
     } else {
         printf("%sSender:%s Receiving ACK number %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
+               packet->sequence_number, COLOR_NEUTRAL);
+        printf("\n");
+    }
+    return;
+}
+
+void print_packet_info_receiver(const struct packet *packet, action type) {
+    if (type == RECEIVING) {
+        printf("%sReceiver:%s Received packet %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
+               packet->sequence_number, COLOR_NEUTRAL);
+        if (packet->length < PACKETSIZE && packet->length > 0)
+            printf(" with size %s%d bytes%s", COLOR_NUMBER, packet->length,
+                   COLOR_NEUTRAL); // for last packet, not full size so specify
+        printf("\n");
+    } else {
+        printf("%sReceiver:%s Sent ACK %s%d%s\n", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
                packet->sequence_number, COLOR_NEUTRAL);
         printf("\n");
     }

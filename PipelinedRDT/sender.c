@@ -22,34 +22,29 @@ void *handle_file_transmission(void *filename);
 
 void transmission_done();
 
-/* SENDER AND RECEIVER INFO */
+/* SENDING AND RECEIVING */
 int sender_socket, receiver_socket;
 struct sockaddr_in sender_address, receiver_address;
-struct hostent *receiver;
-
-/* SENDING AND RECEIVING */
-struct packet received_data, sent_data;
+struct packet received_data, send_data;
 int bytes_sent, bytes_read;
+struct hostent *receiver;
+socklen_t addr_size = sizeof(struct sockaddr);
 
-/* FILE */
+/* FILE*/
+FILE *file;
+char *file_buffer;
 char filename[150];
 long file_length = 0;
-char *file_buffer; // to read data of served file
 
 /* PACKETS */
 int total_number_of_packets = -1;
-int timeout, window_size;
-
-int window_start = 0;
-int window_end = 0;
+int timeout;
+int window_size, window_start = 0, window_end = 0;
 int request_number = 0;
 int sn = 0;
 long seq_num = 0;
 struct pollfd ufd;
 int rv;
-
-socklen_t addr_size = sizeof(struct sockaddr);
-
 
 int main(int argc, char *argv[]) {
     init(argc, argv);
@@ -119,7 +114,6 @@ void *handle_file_transmission(void *filename) {
 
 
     /* READ FILE */
-    FILE *file;
     file = fopen(filename, "rb");
     if (!file) die("File not found");
     fseek(file, 0, SEEK_END);
@@ -170,7 +164,7 @@ void *handle_file_transmission(void *filename) {
             }
         }
 
-        print_packet_info(&received_data, RECEIVING);
+        print_packet_info_sender(&received_data, RECEIVING);
 
         servicerequest:
         if (last_ACK < file_length) {
@@ -187,21 +181,21 @@ void *handle_file_transmission(void *filename) {
             /* while there are packets to send and we are within the current window */
             while (sn < total_number_of_packets && sn <= window_end &&
                    sn >= window_start) {
-                memset(&sent_data, 0, sizeof(struct packet));
-                sent_data.type = DATA;
-                sent_data.sequence_number = seq_num;
+                memset(&send_data, 0, sizeof(struct packet));
+                send_data.type = DATA;
+                send_data.sequence_number = seq_num;
                 if (sn == window_start) seq_num = last_ACK;
                 int buffadd = seq_num;
                 char *chunk = &file_buffer[buffadd];
-                if ((file_length - seq_num) < PACKETSIZE) sent_data.length = (file_length % PACKETSIZE);
-                else sent_data.length = PACKETSIZE;
-                memcpy(sent_data.data, chunk, sent_data.length);
-                sent_data.total_length = file_length;
+                if ((file_length - seq_num) < PACKETSIZE) send_data.length = (file_length % PACKETSIZE);
+                else send_data.length = PACKETSIZE;
+                memcpy(send_data.data, chunk, send_data.length);
+                send_data.total_length = file_length;
 
-                bytes_sent = sendto(sender_socket, &sent_data, sizeof(struct packet), 0, (
+                bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0, (
                         struct sockaddr *) &receiver_address, sizeof(struct sockaddr));
 
-                print_packet_info(&sent_data, SENDING);
+                print_packet_info_sender(&send_data, SENDING);
 
                 seq_num += (bytes_sent - packet_header_size());
                 sn++;
@@ -215,14 +209,14 @@ void *handle_file_transmission(void *filename) {
 
 /* send a FINAL packet to the receiver indicating the transmission was completed*/
 void transmission_done() {
-    memset(&sent_data, 0, sizeof(struct packet));
-    sent_data.type = FINAL;
-    sent_data.sequence_number = 0;
-    sent_data.length = 0;
+    memset(&send_data, 0, sizeof(struct packet));
+    send_data.type = FINAL;
+    send_data.sequence_number = 0;
+    send_data.length = 0;
 
     live("File transmission completed");
     printf("%sBytes transmitted: %s%ld bytes%s\n", COLOR_CONTENT, COLOR_NUMBER, file_length, COLOR_NEUTRAL);
-    bytes_sent = sendto(sender_socket, &sent_data, sizeof(struct packet), 0, (struct sockaddr *) &receiver_address,
+    bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &receiver_address,
                         sizeof(struct sockaddr));
 }
 
