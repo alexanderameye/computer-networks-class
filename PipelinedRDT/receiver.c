@@ -43,11 +43,11 @@ int main(int argc, char *argv[]) {
         bytes_read = recvfrom(receiver_socket, &received_data, sizeof(struct packet), 0,
                               (struct sockaddr *) &sender_address, &addr_size);
         packet_was_lost = random_loss(packet_loss_probability, &loss_count);
-        if (packet_was_lost) {
+        if (packet_was_lost && received_data.type != FINAL) {
             printf("%sPACKET LOST%s\n\n", COLOR_NEGATIVE, COLOR_NEUTRAL);
             continue;
         }
-        print_packet_info_receiver(&received_data, RECEIVING);
+       // print_packet_info_receiver(&received_data, RECEIVING);
 
         /* transmission done */
         if (received_data.type == FINAL) {
@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
             send_data.sequence_number = expected_packet;
             sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                    sizeof(struct sockaddr));
-            print_packet_info_receiver(&send_data, SENDING);
+          //  print_packet_info_receiver(&send_data, SENDING);
         }
 
     }

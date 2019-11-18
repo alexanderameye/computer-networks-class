@@ -149,14 +149,14 @@ void *handle_file_transmission(void *filename) {
             printf("\nResending at most %d packet(s) starting from sequence number %ld\n", window_size,
                    last_ACK + PACKETSIZE);
             printf("%s%.0f%% %sof packets have been reliably transferred.\n\n", COLOR_NUMBER,
-                   (double) (last_ACK + PACKETSIZE) / (double) PACKETSIZE, COLOR_NEUTRAL);
-            sleep(2);
+                   (((double) last_ACK / (double) PACKETSIZE)/total_number_of_packets)*100, COLOR_NEUTRAL);
+            // sleep(0.5);
         } else if (ufd.revents & POLLIN) {
             bytes_read = recvfrom(sender_socket, &received_data, sizeof(struct packet), 0,
                                   (struct sockaddr *) &receiver_address, &addr_size);
         }
 
-        print_packet_info_sender(&received_data, RECEIVING);
+       // print_packet_info_sender(&received_data, RECEIVING);
 
         servicerequest:
         if (last_ACK < file_length) {
@@ -188,7 +188,7 @@ void *handle_file_transmission(void *filename) {
                 bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0, (
                         struct sockaddr *) &receiver_address, sizeof(struct sockaddr));
 
-                print_packet_info_sender(&send_data, SENDING);
+//                print_packet_info_sender(&send_data, SENDING);
 
                 seq_num += (bytes_sent - packet_header_size());
                 current_packet++;
@@ -210,10 +210,14 @@ void transmission_done() {
     send_data.sequence_number = 0;
     send_data.length = 0;
 
-    live("\nFile transmission completed");
-    printf("%sBytes transmitted: %s%ld bytes%s\n", COLOR_CONTENT, COLOR_NUMBER, file_length, COLOR_NEUTRAL);
+    printf("\n%s=============================", COLOR_ACTION);
+    printf("\n[FILE TRANSMISSION COMPLETED]");
+    printf("\n============================");
+    printf("\n%sBytes: %s%ld%s\n", COLOR_CONTENT, COLOR_NUMBER, file_length, COLOR_NEUTRAL);
     bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &receiver_address,
                         sizeof(struct sockaddr));
+    printf("%sPackets: %s%d%s", COLOR_CONTENT, COLOR_NUMBER, total_number_of_packets, COLOR_NEUTRAL);
+    printf("\n%s=============================\n\n%s", COLOR_ACTION, COLOR_NEUTRAL);
 }
 
 
