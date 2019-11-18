@@ -39,13 +39,12 @@ int main(int argc, char *argv[]) {
     initialize_receiver_socket();
 
     while (1) {
-        /* RECEIVE */
+        /* receive packet and generate loss */
         bytes_read = recvfrom(receiver_socket, &received_data, sizeof(struct packet), 0,
                               (struct sockaddr *) &sender_address, &addr_size);
-
         packet_was_lost = random_loss(packet_loss_probability, &loss_count);
         if (packet_was_lost) {
-            printf("\n%sPACKET LOST%s\n", COLOR_NEGATIVE, COLOR_NEUTRAL);
+            printf("%sPACKET LOST%s\n\n", COLOR_NEGATIVE, COLOR_NEUTRAL);
             continue;
         }
         print_packet_info_receiver(&received_data, RECEIVING);
@@ -61,19 +60,21 @@ int main(int argc, char *argv[]) {
             if (!file_buffer) die("Not enough space for client file buffer.");
         }
 
-        /* SEND ACKNOWLEDGEMENT */
+        /* send acknowledgement */
         memset(&send_data, 0, sizeof(struct packet));
         send_data.type = ACK;
         send_data.length = 0; // ack has no length
+
         if (received_data.sequence_number <= expected_packet) {
+            /* previous packet not lost */
             memcpy(file_buffer + received_data.sequence_number, received_data.data, received_data.length);
-            //send_data.sequence_number = received_data.sequence_number + PACKETSIZE;
-            send_data.sequence_number = received_data.sequence_number; //regular ack, no issue
-            expected_packet = send_data.sequence_number + PACKETSIZE; //expect next package
+            send_data.sequence_number = received_data.sequence_number + PACKETSIZE;
+            expected_packet = send_data.sequence_number;
             sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                    sizeof(struct sockaddr));
             print_packet_info_receiver(&send_data, SENDING);
-        } else { // after a lost packet
+        } else {
+            /* previous packet lost */
             send_data.sequence_number = expected_packet;
             sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                    sizeof(struct sockaddr));
@@ -91,7 +92,7 @@ void transmission_done() {
     send_data.length = 0;
     live("File transmission completed");
     printf("Treated %s%d%s packets as lost\n", COLOR_NUMBER, loss_count, COLOR_NEUTRAL);
-    bytes_sent = sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &receiver_address,
+    bytes_sent = sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                         sizeof(struct sockaddr));
     write_file_to_disk();
 }
@@ -113,8 +114,9 @@ void init(int argc, char *argv[]) {
     printf("\n%s=================================", COLOR_ACTION);
     printf("\n[RECEIVER CREATED]");
     printf("\n=================================");
-    printf("\n%sRECEIVER IP: %s%s\n%sPACKET LOSS PROBABILITY: %s%f",
-           COLOR_CONTENT, COLOR_NEUTRAL, RECEIVER_IP, COLOR_CONTENT, COLOR_NEUTRAL, packet_loss_probability);
+    printf("\n%sRECEIVER IP: %s%s\n%sPACKET LOSS PROBABILITY: %s%.0f%%",
+           COLOR_CONTENT, COLOR_NEUTRAL, RECEIVER_IP, COLOR_CONTENT, COLOR_NEUTRAL,
+           (double) packet_loss_probability * 100);
     printf("\n%s=================================%s\n\n", COLOR_ACTION, COLOR_NEUTRAL);
 }
 

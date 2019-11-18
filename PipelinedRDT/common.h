@@ -81,14 +81,14 @@ int random_loss(const double probability, int *counter) {
 
 void print_packet_info_sender(const struct packet *packet, action type) {
     if (type == SENDING) {
-        printf("%sSender:%s Sending packet with sequence number %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
+        printf("%sSent:    %s pkt %s%d%s", COLOR_ACTION, COLOR_NEUTRAL, COLOR_NUMBER,
                packet->sequence_number, COLOR_NEUTRAL);
         if (packet->length < PACKETSIZE && packet->length > 0)
-            printf(" and size %s%d bytes%s", COLOR_NUMBER, packet->length,
+            printf(" with size %s%d bytes%s", COLOR_NUMBER, packet->length,
                    COLOR_NEUTRAL); // for last packet, not full size so specify
         printf("\n");
     } else {
-        printf("%sSender:%s Receiving ACK number %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
+        printf("%sReceived:%s ack %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
                packet->sequence_number, COLOR_NEUTRAL);
         printf("\n");
     }

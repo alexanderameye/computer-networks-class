@@ -41,7 +41,7 @@ int total_number_of_packets = -1;
 int timeout;
 int window_size, window_start = 0, window_end = 0;
 int request_number = 0;
-int sn = 0;
+int current_packet = 0;
 long seq_num = 0;
 struct pollfd ufd;
 int rv;
@@ -110,8 +110,7 @@ void ask_for_user_input() {
 
 /* Handles the file transmission to the receiver */
 void *handle_file_transmission(void *filename) {
-    long last_ACK = 0; // We know that the first ACK# we get will be 1024
-
+    long last_ACK = 0;
 
     /* READ FILE */
     file = fopen(filename, "rb");
@@ -133,35 +132,28 @@ void *handle_file_transmission(void *filename) {
            PACKETSIZE, COLOR_NEUTRAL, COLOR_NUMBER, COLOR_NEUTRAL, COLOR_NUMBER,
            (file_length - 1) - ((total_number_of_packets - 1) * PACKETSIZE), COLOR_NEUTRAL);
 
-
     goto servicerequest;
 
-
     while (1) {
-        //receive
         memset(&received_data, 0, sizeof(struct packet));
         ufd.fd = sender_socket;
         ufd.events = POLLIN;
-        printf("%sWaiting for receiver response%s\n", COLOR_ACTION, COLOR_NEUTRAL);
-        rv = poll(&ufd, 1, timeout);
-        if (rv == -1) {
-            perror("poll");
-        } else if (rv == 0) //timeout so resend packets starting from last_ack + 1
+        if ((rv = poll(&ufd, 1, timeout)) == -1) die("Polling error");
+        else if (rv == 0) //timeout so resend packets starting from last_ack + 1
         {
             printf("\n%sTIMEOUT %d MILLISECONDS%s\n", COLOR_NEGATIVE, timeout, COLOR_NEUTRAL);
             received_data.sequence_number = last_ACK;
             seq_num = last_ACK;
             received_data.type = ACK;
-            sn = window_start;
-            printf("\nResending at most %d packet(s) starting from sequence number %ld\n", window_size, last_ACK);
+            current_packet = window_start;
+            printf("\nResending at most %d packet(s) starting from sequence number %ld\n", window_size,
+                   last_ACK + PACKETSIZE);
             printf("%s%.0f%% %sof packets have been reliably transferred.\n\n", COLOR_NUMBER,
-                   (double) last_ACK / (double) PACKETSIZE, COLOR_NEUTRAL);
+                   (double) (last_ACK + PACKETSIZE) / (double) PACKETSIZE, COLOR_NEUTRAL);
             sleep(2);
-        } else {
-            if (ufd.revents & POLLIN) {
-                bytes_read = recvfrom(sender_socket, &received_data, sizeof(struct packet), 0,
-                                      (struct sockaddr *) &receiver_address, &addr_size);
-            }
+        } else if (ufd.revents & POLLIN) {
+            bytes_read = recvfrom(sender_socket, &received_data, sizeof(struct packet), 0,
+                                  (struct sockaddr *) &receiver_address, &addr_size);
         }
 
         print_packet_info_sender(&received_data, RECEIVING);
@@ -170,21 +162,22 @@ void *handle_file_transmission(void *filename) {
         if (last_ACK < file_length) {
             request_number = received_data.sequence_number / (int) PACKETSIZE;
 
-
-            /* if previous packet was ACKED then shift window*/
-            if (request_number > window_start && last_ACK == (received_data.sequence_number - PACKETSIZE)) {
-                window_end = window_end + (request_number - 0);
+            /* if previous packet was ACKED then shift window to the right */
+            /* ack received so shift window and send next pkt */
+            if (request_number > window_start &&
+                (last_ACK) == (received_data.sequence_number - PACKETSIZE)) {
+                window_end = window_end + (request_number - window_start);
                 window_start = request_number;
                 last_ACK += PACKETSIZE;
             }
 
             /* while there are packets to send and we are within the current window */
-            while (sn < total_number_of_packets && sn <= window_end &&
-                   sn >= window_start) {
+            while (current_packet < total_number_of_packets && current_packet <= window_end &&
+                   current_packet >= window_start) {
                 memset(&send_data, 0, sizeof(struct packet));
                 send_data.type = DATA;
                 send_data.sequence_number = seq_num;
-                if (sn == window_start) seq_num = last_ACK;
+                if (current_packet == window_start) seq_num = last_ACK;
                 int buffadd = seq_num;
                 char *chunk = &file_buffer[buffadd];
                 if ((file_length - seq_num) < PACKETSIZE) send_data.length = (file_length % PACKETSIZE);
@@ -198,12 +191,15 @@ void *handle_file_transmission(void *filename) {
                 print_packet_info_sender(&send_data, SENDING);
 
                 seq_num += (bytes_sent - packet_header_size());
-                sn++;
+                current_packet++;
             }
         }
 
         /* transmission done */
-        if (last_ACK >= file_length) transmission_done();
+        if (last_ACK >= file_length) {
+            transmission_done();
+            return 0;
+        }
     }
 }
 
@@ -214,7 +210,7 @@ void transmission_done() {
     send_data.sequence_number = 0;
     send_data.length = 0;
 
-    live("File transmission completed");
+    live("\nFile transmission completed");
     printf("%sBytes transmitted: %s%ld bytes%s\n", COLOR_CONTENT, COLOR_NUMBER, file_length, COLOR_NEUTRAL);
     bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &receiver_address,
                         sizeof(struct sockaddr));
