@@ -14,18 +14,18 @@
 #define MAXBUFFERLENGTH 100
 
 
-
 #define RECEIVER_IP "127.0.0.1"
-
 
 
 #define MAX_CONNECTIONS 100
 #define TRUE 1
 #define FALSE 0
 
+
 typedef enum {
     DATA,
-    ACK
+    ACK,
+    FINAL
 } packet_t;
 
 struct packet {
@@ -38,9 +38,10 @@ struct packet {
 
 /* COLORS */
 #define COLOR_ACTION "\033[1;33m"
-#define COLOR_SERVER_CONTENT "\033[1;36m"
+#define COLOR_CONTENT "\033[1;36m"
 #define COLOR_NEUTRAL "\033[0m"
 #define COLOR_NEGATIVE "\033[1;31m"
+#define COLOR_NUMBER "\033[0;32m"
 #define COLOR_POSITIVE "\033[0;32m"
 
 
@@ -48,7 +49,7 @@ struct packet {
 void die(char *message, ...) {
     va_list ap;
     va_start(ap, message);
-    printf("%s[SENDER] ", COLOR_NEGATIVE);
+    printf("%sSender: ", COLOR_NEGATIVE);
     printf("%s%s\n", COLOR_NEUTRAL, message);
     vfprintf(stdout, message, ap);
     fprintf(stdout, "\n");
@@ -63,12 +64,25 @@ typedef enum {
     RECEIVER
 } sender_t;
 
+int packet_header_size() {
+    return sizeof(struct packet) - PACKETSIZE; // Minus the 512 bytes of data
+}
+
+void print_packet_info_server(const struct packet *packet) {
+    printf("%sSender:%s Sending packet with sequence number %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
+           packet->sequence_number, COLOR_NEUTRAL);
+    if (packet->length < PACKETSIZE && packet->length > 0)
+        printf(" and size %s%d bytes%s", COLOR_NUMBER, packet->length,
+               COLOR_NEUTRAL); // for last packet, not full size so specify
+    printf("\n");
+    return;
+}
 
 /* Logs a success or neutral message to the terminal */
 void live(char *message, ...) {
     va_list ap;
     va_start(ap, message);
-    printf("%s[SENDER] ", COLOR_ACTION);
+    printf("%sSender: ", COLOR_ACTION);
     printf("%s", COLOR_NEUTRAL);
     vfprintf(stdout, message, ap);
     fprintf(stdout, "\n");

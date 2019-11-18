@@ -6,28 +6,27 @@
 #include <string.h>
 #include <arpa/inet.h>
 
+/* FUNCTIONS */
+void init(int argc, char *argv[]);
+
+void initialize_receiver_socket();
+
+/* PACKETS */
 double packet_loss_probability;
-char *buffer = NULL; //holds received data
+char *file_buffer = NULL;
+
+/* SENDER AND RECEIVER INFO */
 int receiver_socket;
 struct sockaddr_in receiver_address, sender_address;
 
-/* FUNCTIONS */
-void initialize_receiver_socket();
-
-/* SENT AND RECEIVED DATA */
-struct packet received_data;
-struct packet sent_data;
+/* SENDING AND RECEIVING */
+struct packet received_data, sent_data;
 int bytes_read;
+
 socklen_t addr_size;
 
 int main(int argc, char *argv[]) {
-    /* PARSE COMMAND LINE ARGUMENTS */
-    if (argc != 2) usage_error();
-    packet_loss_probability = atof(argv[1]);
-    printf("%s[RECEIVER EXECUTION]\nRECEIVER IP: %s%s\n%sPACKET LOSS PROBABILITY: %s%f\n\n",
-           COLOR_CONTENT, COLOR_NEUTRAL, RECEIVER_IP, COLOR_CONTENT, COLOR_NEUTRAL,
-           packet_loss_probability);
-
+    init(argc, argv);
     initialize_receiver_socket();
 
 
@@ -42,23 +41,32 @@ int main(int argc, char *argv[]) {
     }
 }
 
+/* Parses command line arguments */
+void init(int argc, char *argv[]) {
+    if (argc != 2) usage_error();
+    packet_loss_probability = atof(argv[1]);
+    printf("\n%s=================================", COLOR_ACTION);
+    printf("\n[RECEIVER CREATED]");
+    printf("\n=================================");
+    printf("\n%sRECEIVER IP: %s%s\n%sPACKET LOSS PROBABILITY: %s%f",
+           COLOR_CONTENT, COLOR_NEUTRAL, RECEIVER_IP, COLOR_CONTENT, COLOR_NEUTRAL, packet_loss_probability);
+    printf("\n%s=================================%s\n\n", COLOR_ACTION, COLOR_NEUTRAL);
+}
+
+/* Creates a receiver socket, initializes its address and binds it */
 void initialize_receiver_socket() {
-    /* CREATE RECEIVER SOCKET */
     if ((receiver_socket = socket(SOCKET_DOMAIN, SOCKET_TYPE, SOCKET_PROTOCOL)) == -1) die("Socket creation failed");
     else live("Socket created");
 
-    /* INITIALIZE RECEIVER ADDRESS */
     memset((char *) &receiver_address, 0, sizeof(receiver_address));
     receiver_address.sin_family = SOCKET_DOMAIN;
     inet_pton(AF_INET, RECEIVER_IP, &(receiver_address.sin_addr));
     receiver_address.sin_port = htons(PORT);
 
-    /* ALLOW US TO RERUN SERVER IMMEDIATELY AFTER KILLING IT */
     setsockopt(receiver_socket, SOL_SOCKET, SO_REUSEADDR,
                (const void *) 1, sizeof(int));
     char str[INET_ADDRSTRLEN];
 
-    /* BIND RECEIVER ADDRESS TO SOCKET */
     if (bind(receiver_socket, (struct sockaddr *) &receiver_address, sizeof(receiver_address)) == -1)
         die("Socket bind failed");
     else live("Socket bound\n");

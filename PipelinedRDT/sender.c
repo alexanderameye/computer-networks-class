@@ -6,17 +6,21 @@
 #include <string.h>
 #include <pthread.h>
 #include <netdb.h>
+#include <sys/poll.h>
+#include <unistd.h>
 
 /* FUNCTIONS */
 void init(int argc, char *argv[]);
-
-void ask_for_user_input();
 
 void initialize_sender_socket();
 
 void initialize_receiver_address();
 
+void ask_for_user_input();
+
 void *handle_file_transmission(void *filename);
+
+void transmission_done();
 
 /* SENDER AND RECEIVER INFO */
 int sender_socket, receiver_socket;
@@ -25,16 +29,27 @@ struct hostent *receiver;
 
 /* SENDING AND RECEIVING */
 struct packet received_data, sent_data;
-int bytes_sent;
+int bytes_sent, bytes_read;
 
 /* FILE */
 char filename[150];
 long file_length = 0;
-char *buffer;
+char *file_buffer; // to read data of served file
 
 /* PACKETS */
 int total_number_of_packets = -1;
 int timeout, window_size;
+
+int window_start = 0;
+int window_end = 0;
+int request_number = 0;
+int sn = 0;
+long seq_num = 0;
+struct pollfd ufd;
+int rv;
+
+socklen_t addr_size = sizeof(struct sockaddr);
+
 
 int main(int argc, char *argv[]) {
     init(argc, argv);
@@ -57,6 +72,7 @@ void init(int argc, char *argv[]) {
            COLOR_CONTENT, COLOR_NEUTRAL,
            window_size, COLOR_CONTENT, COLOR_NEUTRAL, PORT);
     printf("\n%s======================%s\n\n", COLOR_ACTION, COLOR_NEUTRAL);
+    window_end = window_size - 1;
 }
 
 /* Creates a sender socket and initializes its address */
@@ -99,53 +115,112 @@ void ask_for_user_input() {
 
 /* Handles the file transmission to the receiver */
 void *handle_file_transmission(void *filename) {
-    char *name;
-    if (filename) {
-        /* OPEN FILE */
-        name = (char *) filename;
-        FILE *file;
-        file = fopen(name, "rb");
-        if (!file) die("File not found");
-
-        /* READ FILE */
-        fseek(file, 0, SEEK_END);
-        file_length = ftell(file);
-        rewind(file);
-        buffer = (char *) malloc((file_length) * sizeof(char));
-        if (!buffer) die("File too large to fit into memory");
-        fread(buffer, file_length, 1, file);
-        fclose(file);
-        live("File read");
-        printf("%sFile size: %s%ld bytes\n", COLOR_CONTENT, COLOR_NEUTRAL, file_length);
-
-        /* DIVIDE FILE INTO PACKETS */
-        total_number_of_packets = ((file_length - 1) / PACKETSIZE) + 1;
-        printf("%sPackets: %s%d packets of %d bytes, 1 packet of %ld bytes.\n\n", COLOR_CONTENT, COLOR_NEUTRAL,
-               total_number_of_packets - 1,
-               PACKETSIZE, (file_length) - ((total_number_of_packets - 1) * PACKETSIZE));
-
-        /* SEND FILE NAME */
-        memset(&sent_data, 0, sizeof(struct packet));
-        sent_data.type = DATA;
-        sent_data.sequence_number = 0;
-        strcpy(sent_data.data, name);
-        sent_data.length = strlen(name);
+    long last_ACK = 0; // We know that the first ACK# we get will be 1024
 
 
-        //send from sender_socket to receiver address
-        bytes_sent = sendto(sender_socket, &sent_data, sizeof(struct packet), 0, (struct sockaddr *) &receiver_address,
-                            sizeof(struct sockaddr));
+    /* READ FILE */
+    FILE *file;
+    file = fopen(filename, "rb");
+    if (!file) die("File not found");
+    fseek(file, 0, SEEK_END);
+    file_length = ftell(file);
+    rewind(file);
+    file_buffer = (char *) malloc((file_length) * sizeof(char));
+    if (!file_buffer) die("File too large");
+    fread(file_buffer, file_length, 1, file);
+    fclose(file);
+    live("File fetched");
+    printf("%sFile size: %s%ld bytes%s\n", COLOR_CONTENT, COLOR_NUMBER, file_length, COLOR_NEUTRAL);
+
+    /* DIVIDE FILE INTO PACKETS */
+    total_number_of_packets = ((file_length - 1) / PACKETSIZE) + 1; // +1 to compensate for integer division
+    printf("%sPackets: %s%d%s packets of %s%d bytes%s, %s1%s packet of %s%ld bytes%s\n\n", COLOR_CONTENT, COLOR_NUMBER,
+           total_number_of_packets - 1, COLOR_NEUTRAL, COLOR_NUMBER,
+           PACKETSIZE, COLOR_NEUTRAL, COLOR_NUMBER, COLOR_NEUTRAL, COLOR_NUMBER,
+           (file_length - 1) - ((total_number_of_packets - 1) * PACKETSIZE), COLOR_NEUTRAL);
 
 
-        //sendto(socket, buffer containing data, size of buf, flags, dest addr, addr length)
-        //we know dest addr because we inputted it, we don't need receiver to send us something first
+    goto servicerequest;
 
 
-        //RECEIVE ACKS LATER
-        //recvfrom(socket, buf to receive data, len of buf, flags, src addr, addr length)
+    while (1) {
+        //receive
+        memset(&received_data, 0, sizeof(struct packet));
+        ufd.fd = sender_socket;
+        ufd.events = POLLIN;
+        printf("Polling for a client request.....\n");
+        rv = poll(&ufd, 1, timeout);
+        if (rv == -1) {
+            perror("poll");
+        } else if (rv == 0) //timeout so resend packets starting from last_ack + 1
+        {
+            printf("%sTIMEOUT%s\n", COLOR_NEGATIVE, COLOR_NEUTRAL);
+            received_data.sequence_number = last_ACK;
+            seq_num = last_ACK;
+            received_data.type = ACK;
+            sn = window_start;
+            printf("Resending at most %d packets beginning with sequence number %ld\n", window_size, last_ACK);
+            printf("%.0f%% of packets have been reliably transferred.\n", (double) last_ACK / (double) PACKETSIZE);
+            sleep(2);
+        } else {
+            if (ufd.revents & POLLIN) {
+                bytes_read = recvfrom(sender_socket, &received_data, sizeof(struct packet), 0,
+                                      (struct sockaddr *) &receiver_address, &addr_size);
+            }
+        }
 
+        servicerequest:
+        if (last_ACK < file_length) {
+            request_number = received_data.sequence_number / (int) PACKETSIZE;
+
+
+            /* if previous packet was ACKED then shift window*/
+            if (request_number > window_start && last_ACK == (received_data.sequence_number - PACKETSIZE)) {
+                window_end = window_end + (request_number - 0);
+                window_start = request_number;
+                last_ACK += PACKETSIZE;
+            }
+
+            /* while there are packets to send and we are within the current window */
+            while (sn < total_number_of_packets && sn <= window_end &&
+                   sn >= window_start) {
+                memset(&sent_data, 0, sizeof(struct packet));
+                sent_data.type = DATA;
+                sent_data.sequence_number = seq_num;
+                if (sn == window_start) seq_num = last_ACK;
+                int buffadd = seq_num;
+                char *chunk = &file_buffer[buffadd];
+                if ((file_length - seq_num) < PACKETSIZE) sent_data.length = (file_length % PACKETSIZE);
+                else sent_data.length = PACKETSIZE;
+                memcpy(sent_data.data, chunk, sent_data.length);
+                sent_data.total_length = file_length;
+
+                bytes_sent = sendto(sender_socket, &sent_data, sizeof(struct packet), 0, (
+                        struct sockaddr *) &receiver_address, sizeof(struct sockaddr));
+
+                print_packet_info_server(&sent_data);
+
+                seq_num += (bytes_sent - packet_header_size());
+                sn++;
+            }
+        }
+
+        /* transmission done */
+        if (last_ACK >= file_length) transmission_done();
     }
+}
 
+/* send a FINAL packet to the receiver indicating the transmission was completed*/
+void transmission_done() {
+    memset(&sent_data, 0, sizeof(struct packet));
+    sent_data.type = FINAL;
+    sent_data.sequence_number = 0;
+    sent_data.length = 0;
+
+    live("File transmission completed");
+    printf("%sBytes transmitted: %s%ld bytes%s\n", COLOR_CONTENT, COLOR_NUMBER, file_length, COLOR_NEUTRAL);
+    bytes_sent = sendto(sender_socket, &sent_data, sizeof(struct packet), 0, (struct sockaddr *) &receiver_address,
+                        sizeof(struct sockaddr));
 }
 
 
