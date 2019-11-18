@@ -148,19 +148,20 @@ void *handle_file_transmission(void *filename) {
         memset(&received_data, 0, sizeof(struct packet));
         ufd.fd = sender_socket;
         ufd.events = POLLIN;
-        printf("Polling for a client request.....\n");
+        printf("%sWaiting for receiver response%s\n", COLOR_ACTION, COLOR_NEUTRAL);
         rv = poll(&ufd, 1, timeout);
         if (rv == -1) {
             perror("poll");
         } else if (rv == 0) //timeout so resend packets starting from last_ack + 1
         {
-            printf("%sTIMEOUT%s\n", COLOR_NEGATIVE, COLOR_NEUTRAL);
+            printf("\n%sTIMEOUT %d MILLISECONDS%s\n", COLOR_NEGATIVE, timeout, COLOR_NEUTRAL);
             received_data.sequence_number = last_ACK;
             seq_num = last_ACK;
             received_data.type = ACK;
             sn = window_start;
-            printf("Resending at most %d packets beginning with sequence number %ld\n", window_size, last_ACK);
-            printf("%.0f%% of packets have been reliably transferred.\n", (double) last_ACK / (double) PACKETSIZE);
+            printf("\nResending at most %d packet(s) starting from sequence number %ld\n", window_size, last_ACK);
+            printf("%s%.0f%% %sof packets have been reliably transferred.\n\n", COLOR_NUMBER,
+                   (double) last_ACK / (double) PACKETSIZE, COLOR_NEUTRAL);
             sleep(2);
         } else {
             if (ufd.revents & POLLIN) {
@@ -168,6 +169,8 @@ void *handle_file_transmission(void *filename) {
                                       (struct sockaddr *) &receiver_address, &addr_size);
             }
         }
+
+        print_packet_info(&received_data, RECEIVING);
 
         servicerequest:
         if (last_ACK < file_length) {
@@ -198,7 +201,7 @@ void *handle_file_transmission(void *filename) {
                 bytes_sent = sendto(sender_socket, &sent_data, sizeof(struct packet), 0, (
                         struct sockaddr *) &receiver_address, sizeof(struct sockaddr));
 
-                print_packet_info_server(&sent_data);
+                print_packet_info(&sent_data, SENDING);
 
                 seq_num += (bytes_sent - packet_header_size());
                 sn++;

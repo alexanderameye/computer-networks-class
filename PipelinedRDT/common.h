@@ -60,21 +60,27 @@ void die(char *message, ...) {
 }
 
 typedef enum {
-    SENDER,
-    RECEIVER
-} sender_t;
+    SENDING,
+    RECEIVING
+} action;
 
 int packet_header_size() {
     return sizeof(struct packet) - PACKETSIZE; // Minus the 512 bytes of data
 }
 
-void print_packet_info_server(const struct packet *packet) {
-    printf("%sSender:%s Sending packet with sequence number %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
-           packet->sequence_number, COLOR_NEUTRAL);
-    if (packet->length < PACKETSIZE && packet->length > 0)
-        printf(" and size %s%d bytes%s", COLOR_NUMBER, packet->length,
-               COLOR_NEUTRAL); // for last packet, not full size so specify
-    printf("\n");
+void print_packet_info(const struct packet *packet, action type) {
+    if (type == SENDING) {
+        printf("%sSender:%s Sending packet with sequence number %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
+               packet->sequence_number, COLOR_NEUTRAL);
+        if (packet->length < PACKETSIZE && packet->length > 0)
+            printf(" and size %s%d bytes%s", COLOR_NUMBER, packet->length,
+                   COLOR_NEUTRAL); // for last packet, not full size so specify
+        printf("\n");
+    } else {
+        printf("%sSender:%s Receiving ACK number %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
+               packet->sequence_number, COLOR_NEUTRAL);
+        printf("\n");
+    }
     return;
 }
 
