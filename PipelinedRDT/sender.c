@@ -5,84 +5,88 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <pthread.h>
-#include <arpa/inet.h>
 #include <netdb.h>
 
 /* FUNCTIONS */
-void wait_for_user_input(); // ask user for file name input
-void initialize_sender_socket(); // create and bind sender socket
-void *handle_file_transmission(void *filename); // handle file transmission
+void init(int argc, char *argv[]);
+
+void ask_for_user_input();
+
+void initialize_sender_socket();
+
 void initialize_receiver_address();
 
-/* SENDER/RECEIVER INFO */
+void *handle_file_transmission(void *filename);
+
+/* SENDER AND RECEIVER INFO */
 int sender_socket, receiver_socket;
 struct sockaddr_in sender_address, receiver_address;
 struct hostent *receiver;
 
-
 /* SENDING AND RECEIVING */
 struct packet received_data, sent_data;
 int bytes_sent;
+
+/* FILE */
 char filename[150];
 long file_length = 0;
-char *buffer; //holds data of sent file
+char *buffer;
 
 /* PACKETS */
 int total_number_of_packets = -1;
 int timeout, window_size;
 
-
-socklen_t receiver_address_length;
-
-
 int main(int argc, char *argv[]) {
-    /* PARSE COMMAND LINE ARGUMENTS */
+    init(argc, argv);
+    initialize_sender_socket();
+    initialize_receiver_address();
+    ask_for_user_input();
+}
+
+/* Parses command line arguments */
+void init(int argc, char *argv[]) {
     if (argc != 4) usage_error();
     receiver = (struct hostent *) gethostbyname(argv[1]);
     timeout = atoi(argv[2]);
     window_size = atoi(argv[3]);
-    printf("%s[PROGRAM EXECUTION]\nRECEIVER IP: %s%s\n%sTIMEOUT: %s%d\n%sWINDOW SIZE: %s%d\n%sPORT NUMBER: %s10080\n\n",
-           COLOR_SERVER_CONTENT, COLOR_NEUTRAL, receiver->h_name, COLOR_SERVER_CONTENT, COLOR_NEUTRAL, timeout,
-           COLOR_SERVER_CONTENT, COLOR_NEUTRAL,
-           window_size, COLOR_SERVER_CONTENT, COLOR_NEUTRAL);
-
-    initialize_sender_socket();
-    initialize_receiver_address();
-
-    wait_for_user_input();
+    printf("\n%s======================", COLOR_ACTION);
+    printf("\n[SENDER CREATED]");
+    printf("\n======================");
+    printf("\n%sRECEIVER IP: %s%s\n%sTIMEOUT: %s%d\n%sWINDOW SIZE: %s%d\n%sPORT NUMBER: %s%d",
+           COLOR_CONTENT, COLOR_NEUTRAL, receiver->h_name, COLOR_CONTENT, COLOR_NEUTRAL, timeout,
+           COLOR_CONTENT, COLOR_NEUTRAL,
+           window_size, COLOR_CONTENT, COLOR_NEUTRAL, PORT);
+    printf("\n%s======================%s\n\n", COLOR_ACTION, COLOR_NEUTRAL);
 }
 
-
+/* Creates a sender socket and initializes its address */
 void initialize_sender_socket() {
-    /* CREATE SENDER SOCKET */
     if ((sender_socket = socket(SOCKET_DOMAIN, SOCKET_TYPE, SOCKET_PROTOCOL)) == -1) die("Socket creation failed");
-    else live("Socket created");
+    else live("Socket created\n");
 
-    /* INITIALIZE SENDER ADDRESS */
     memset((char *) &sender_address, 0, sizeof(sender_address));
     sender_address.sin_family = SOCKET_DOMAIN;
     sender_address.sin_addr.s_addr = INADDR_ANY;
     sender_address.sin_port = htons(PORT);
 
-    /* ALLOW US TO RERUN SERVER IMMEDIATELY AFTER KILLING IT */
     setsockopt(sender_socket, SOL_SOCKET, SO_REUSEADDR,
                (const void *) 1, sizeof(int));
     char str[INET_ADDRSTRLEN];
 }
 
-void initialize_receiver_address()
-{
-    /* INITIALIZE RECEIVER ADDRESS USING USER-ENTERED IP ADDRESS */
+/* Initializes an address for the receiver based on the entered IP address */
+void initialize_receiver_address() {
     memset((char *) &receiver_address, 0, sizeof(receiver_address));
     receiver_address.sin_family = SOCKET_DOMAIN;
     receiver_address.sin_addr = *((struct in_addr *) receiver->h_addr);
     receiver_address.sin_port = htons(PORT);
 }
 
-void wait_for_user_input() {
-    /* ASK USER FOR A FILE CONTINUOUSLY */
+/* Continuously asks the user for a file to be transmitted */
+void ask_for_user_input() {
     while (1) {
-        printf("File Name: ");
+        live("Waiting for a file to be transmitted");
+        printf("%sFile name: %s", COLOR_CONTENT, COLOR_NEUTRAL);
         scanf("%s", filename);
 
         pthread_t main_thread;
@@ -93,6 +97,7 @@ void wait_for_user_input() {
     }
 }
 
+/* Handles the file transmission to the receiver */
 void *handle_file_transmission(void *filename) {
     char *name;
     if (filename) {
@@ -110,11 +115,12 @@ void *handle_file_transmission(void *filename) {
         if (!buffer) die("File too large to fit into memory");
         fread(buffer, file_length, 1, file);
         fclose(file);
-        printf("File read, %ld bytes.\n", file_length);
+        live("File read");
+        printf("%sFile size: %s%ld bytes\n", COLOR_CONTENT, COLOR_NEUTRAL, file_length);
 
         /* DIVIDE FILE INTO PACKETS */
         total_number_of_packets = ((file_length - 1) / PACKETSIZE) + 1;
-        printf("File will be divided into %d packets of %d bytes and 1 packet of %ld bytes.\n\n",
+        printf("%sPackets: %s%d packets of %d bytes, 1 packet of %ld bytes.\n\n", COLOR_CONTENT, COLOR_NEUTRAL,
                total_number_of_packets - 1,
                PACKETSIZE, (file_length) - ((total_number_of_packets - 1) * PACKETSIZE));
 

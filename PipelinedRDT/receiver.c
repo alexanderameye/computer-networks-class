@@ -4,7 +4,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <string.h>
-#include <netdb.h>
 #include <arpa/inet.h>
 
 double packet_loss_probability;
@@ -26,7 +25,7 @@ int main(int argc, char *argv[]) {
     if (argc != 2) usage_error();
     packet_loss_probability = atof(argv[1]);
     printf("%s[RECEIVER EXECUTION]\nRECEIVER IP: %s%s\n%sPACKET LOSS PROBABILITY: %s%f\n\n",
-           COLOR_SERVER_CONTENT, COLOR_NEUTRAL, RECEIVER_IP, COLOR_SERVER_CONTENT, COLOR_NEUTRAL,
+           COLOR_CONTENT, COLOR_NEUTRAL, RECEIVER_IP, COLOR_CONTENT, COLOR_NEUTRAL,
            packet_loss_probability);
 
     initialize_receiver_socket();
@@ -39,7 +38,7 @@ int main(int argc, char *argv[]) {
                               (struct sockaddr *) &sender_address, &addr_size);
         char filename[150];
         strcpy(filename, received_data.data);
-        printf("File: %s\n", filename);
+        printf("The file %s will be sent\n", filename);
     }
 }
 
