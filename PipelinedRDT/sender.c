@@ -46,6 +46,7 @@ long seq_num = 0;
 struct pollfd ufd;
 int rv;
 
+
 int main(int argc, char *argv[]) {
     init(argc, argv);
     initialize_sender_socket();
@@ -110,6 +111,11 @@ void ask_for_user_input() {
 
 /* Handles the file transmission to the receiver */
 void *handle_file_transmission(void *filename) {
+    /* GOODPUT */
+    double good_put;
+
+    time_t start = time(NULL);
+
     long last_ACK = 0;
 
     /* READ FILE */
@@ -198,6 +204,10 @@ void *handle_file_transmission(void *filename) {
         /* transmission done */
         if (last_ACK >= file_length) {
             transmission_done();
+            time_t end = time(NULL);
+            double elapsed = (end-start);
+            printf("\nELAPSED TIME: %f", elapsed);
+            printf("\nGOODPUT: %f", total_number_of_packets/elapsed);
             return 0;
         }
     }
