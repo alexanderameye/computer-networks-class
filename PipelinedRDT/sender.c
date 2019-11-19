@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <netdb.h>
 #include <sys/poll.h>
+#include <unistd.h>
 
 /* FUNCTIONS */
 void init(int argc, char *argv[]);
@@ -112,8 +113,10 @@ void ask_for_user_input() {
 void *handle_file_transmission(void *filename) {
     /* GOODPUT */
     time_t start = time(NULL);
+    long last_ACK = -1;
+    // long last_ACK = 0;
 
-    long last_ACK = 0;
+    received_data.sequence_number = -1;
 
     /* READ FILE */
     file = fopen(filename, "rb");
@@ -141,8 +144,8 @@ void *handle_file_transmission(void *filename) {
 
     goto servicerequest;
 
+    //TODO/ can't recover from loss....
     while (1) {
-        printf("\nLAST ACK: %ld\n", last_ACK);
         memset(&received_data, 0, sizeof(struct packet));
         ufd.fd = sender_socket;
         ufd.events = POLLIN;
@@ -150,42 +153,63 @@ void *handle_file_transmission(void *filename) {
         else if (rv == 0) //timeout so resend packets starting from last_ack + 1
         {
             printf("\n%sTIMEOUT %s%dms%s", COLOR_NEGATIVE, COLOR_NUMBER, timeout, COLOR_NEUTRAL);
+            //received_data.sequence_number = last_ACK;
             received_data.sequence_number = last_ACK;
-            seq_num = last_ACK;
+            // seq_num = last_ACK;
+            seq_num = last_ACK+1;
             received_data.type = ACK;
             current_packet = window_start;
             printf("\nResending at most %d packet(s) starting from pkt %ld\n", window_size,
-                   last_ACK);
+                   last_ACK+1);
             printf("%s%.0f%% %sof packets transmitted\n\n", COLOR_NUMBER,
                    ((double) last_ACK / total_number_of_packets) * 100, COLOR_NEUTRAL);
-            // sleep(0.5);
+            sleep(0.5);
         } else if (ufd.revents & POLLIN) {
             bytes_read = recvfrom(sender_socket, &received_data, sizeof(struct packet), 0,
                                   (struct sockaddr *) &receiver_address, &addr_size);
         }
 
+       // sleep(0.5);
         print_packet_info_sender(&received_data, RECEIVING);
 
-        servicerequest:
+        //received 58
+        //lost 58
+        //so send back back 57
+        //resend from pkt 58
 
-        if (last_ACK < total_number_of_packets) {
+        servicerequest:
+        if (last_ACK + 1 < total_number_of_packets) {
+            //if (last_ACK < total_number_of_packets) {
             request_number = received_data.sequence_number;
-            if (request_number > window_start && last_ACK == received_data.sequence_number - 1) {
-                window_end = window_end + (request_number - window_start);
-                window_start = request_number;
+
+            /* is the ACK valid and should the window be shifted, or should the ACK be ignored*/
+            if (request_number >= window_start && last_ACK == received_data.sequence_number - 1) {
+                //if (request_number > window_start && last_ACK == received_data.sequence_number - 1) {
+                window_end = window_end + (request_number + 1 - window_start);
+                //window_end = window_end + (request_number - window_start);
+                window_start = request_number + 1;
+                //printf("NEW WINDOW: [%d - %d]", window_start, window_end);
+                //window_start = request_number;
                 last_ACK += 1;
+                //printf("\nNEW ACK %ld\n", last_ACK);
             }
 
+
+
+
             /* while there are packets to send and we are within the current window */
-            while (current_packet < total_number_of_packets && current_packet <= window_end &&
+            while (current_packet <= total_number_of_packets && current_packet <= window_end &&
                    current_packet >= window_start) {
                 memset(&send_data, 0, sizeof(struct packet));
                 send_data.type = DATA;
                 send_data.sequence_number = seq_num;
-                if (current_packet == window_start) seq_num = last_ACK;
+
+                if (current_packet == window_start) seq_num = last_ACK + 1;
+                //if (current_packet == window_start) seq_num = last_ACK;
                 int buffadd = seq_num * PACKETSIZE;
                 char *chunk = &file_buffer[buffadd];
-                if ((file_length - (seq_num * PACKETSIZE)) < PACKETSIZE) send_data.length = (file_length % PACKETSIZE);
+                if ((file_length - ((seq_num - 1) * PACKETSIZE)) < PACKETSIZE)
+                    send_data.length = (file_length % PACKETSIZE);
                 else send_data.length = PACKETSIZE;
                 memcpy(send_data.data, chunk, send_data.length);
                 send_data.total_length = file_length;
@@ -202,7 +226,8 @@ void *handle_file_transmission(void *filename) {
         }
 
         /* transmission done */
-        if (last_ACK >= total_number_of_packets) {
+        // if(last_ACK+1 >= total_number_of_packets){
+        if (last_ACK + 1 >= total_number_of_packets) {
             transmission_done(start);
             return 0;
         }
@@ -231,7 +256,7 @@ void transmission_done(time_t start) {
         printf("%sElapsed time too short to calculate goodput.%s\n", COLOR_CONTENT, COLOR_NEUTRAL);
     } else {
         printf("%sElapsed Time: %s%f\n", COLOR_CONTENT, COLOR_NUMBER, elapsed);
-        printf("%sGoodput: %s%f%s", COLOR_CONTENT, COLOR_NUMBER, total_number_of_packets / elapsed, COLOR_NEUTRAL);
+        printf("%sGoodput: %s%f%s\n", COLOR_CONTENT, COLOR_NUMBER, total_number_of_packets / elapsed, COLOR_NEUTRAL);
     }
     printf("%s==================================================================\n\n%s", COLOR_ACTION, COLOR_NEUTRAL);
 }

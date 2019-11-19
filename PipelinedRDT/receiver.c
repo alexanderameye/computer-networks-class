@@ -26,7 +26,7 @@ int receiver_socket;
 struct sockaddr_in receiver_address, sender_address;
 struct packet received_data, send_data;
 int bytes_read, bytes_sent;
-long expected_packet = 0;
+long expected_packet = -1;
 socklen_t addr_size = sizeof(struct sockaddr);
 
 /* FILE*/
@@ -54,6 +54,7 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
+        if(expected_packet == -1) expected_packet = 0;
         /* transmission done */
         if (received_data.type == FINAL) {
             transmission_done();
@@ -70,18 +71,24 @@ int main(int argc, char *argv[]) {
         send_data.type = ACK;
         send_data.length = 0;
 
+
         if (received_data.sequence_number <= expected_packet) {
+           // printf("TRUE");
+
             /* previous packet not lost */
             memcpy(file_buffer + received_data.sequence_number * PACKETSIZE, received_data.data, received_data.length);
-            send_data.sequence_number = received_data.sequence_number + 1;
-            expected_packet = send_data.sequence_number;
+            send_data.sequence_number = received_data.sequence_number; //send ack back with same number
+           // send_data.sequence_number = received_data.sequence_number + 1;
+            expected_packet = send_data.sequence_number +1;//expect next ack
+          //  expected_packet = send_data.sequence_number;
 
             sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                    sizeof(struct sockaddr));
             print_packet_info_receiver(&send_data, SENDING);
         } else {
             /* previous packet lost */
-            send_data.sequence_number = expected_packet;
+            //send_data.sequence_number = expected_packet;
+            send_data.sequence_number = expected_packet-1; //still expect same package
             sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                    sizeof(struct sockaddr));
             print_packet_info_receiver(&send_data, SENDING);
