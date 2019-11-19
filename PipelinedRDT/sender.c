@@ -19,7 +19,7 @@ void ask_for_user_input();
 
 void *handle_file_transmission(void *filename);
 
-void transmission_done();
+void transmission_done(time_t start);
 
 /* SENDING AND RECEIVING */
 int sender_socket, receiver_socket;
@@ -111,7 +111,6 @@ void ask_for_user_input() {
 /* Handles the file transmission to the receiver */
 void *handle_file_transmission(void *filename) {
     /* GOODPUT */
-    double good_put;
     time_t start = time(NULL);
 
     long last_ACK = 0;
@@ -139,6 +138,7 @@ void *handle_file_transmission(void *filename) {
     goto servicerequest;
 
     while (1) {
+        printf("\nLAST ACK: %ld\n", last_ACK);
         memset(&received_data, 0, sizeof(struct packet));
         ufd.fd = sender_socket;
         ufd.events = POLLIN;
@@ -153,23 +153,23 @@ void *handle_file_transmission(void *filename) {
             printf("\nResending at most %d packet(s) starting from sequence number %ld\n", window_size,
                    last_ACK + PACKETSIZE);
             printf("%s%.0f%% %sof packets have been reliably transferred.\n\n", COLOR_NUMBER,
-                   ((double) last_ACK /total_number_of_packets)*100, COLOR_NEUTRAL);
+                   ((double) last_ACK / total_number_of_packets) * 100, COLOR_NEUTRAL);
             // sleep(0.5);
         } else if (ufd.revents & POLLIN) {
             bytes_read = recvfrom(sender_socket, &received_data, sizeof(struct packet), 0,
                                   (struct sockaddr *) &receiver_address, &addr_size);
         }
 
-       // print_packet_info_sender(&received_data, RECEIVING);
+        print_packet_info_sender(&received_data, RECEIVING);
 
         servicerequest:
         //NEW
-        if(last_ACK < total_number_of_packets) {
-     //   if (last_ACK < file_length) {
+        if (last_ACK < total_number_of_packets) {
+            //   if (last_ACK < file_length) {
 
-        //NEW
+            //NEW
             request_number = received_data.sequence_number; //initially the sequence number is 0 so request number is also 0
-           // request_number = received_data.sequence_number / (int) PACKETSIZE;
+            // request_number = received_data.sequence_number / (int) PACKETSIZE;
 
 
             /* if previous packet was ACKED then shift window to the right */
@@ -177,8 +177,7 @@ void *handle_file_transmission(void *filename) {
 
             //NEW
             //for example lastACK is 0, then ack 1 arrives
-            if(request_number > window_start && last_ACK == received_data.sequence_number-1)
-            {
+            if (request_number > window_start && last_ACK == received_data.sequence_number - 1) {
                 window_end = window_end + (request_number - window_start);
                 window_start = request_number;
                 last_ACK += 1;
@@ -204,8 +203,8 @@ void *handle_file_transmission(void *filename) {
                 char *chunk = &file_buffer[buffadd];
 
                 //NEW
-                if ((file_length - (seq_num*PACKETSIZE)) < PACKETSIZE) send_data.length = (file_length % PACKETSIZE);
-               // if ((file_length - seq_num) < PACKETSIZE) send_data.length = (file_length % PACKETSIZE);
+                if ((file_length - (seq_num * PACKETSIZE)) < PACKETSIZE) send_data.length = (file_length % PACKETSIZE);
+                    // if ((file_length - seq_num) < PACKETSIZE) send_data.length = (file_length % PACKETSIZE);
                 else send_data.length = PACKETSIZE;
 
 
@@ -215,11 +214,11 @@ void *handle_file_transmission(void *filename) {
                 bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0, (
                         struct sockaddr *) &receiver_address, sizeof(struct sockaddr));
 
-              // print_packet_info_sender(&send_data, SENDING);
+                print_packet_info_sender(&send_data, SENDING);
 
-               //NEW
-               seq_num += ((bytes_sent - packet_header_size()) / PACKETSIZE);
-               // seq_num += (bytes_sent - packet_header_size());
+                //NEW
+                seq_num += ((bytes_sent - packet_header_size()) / PACKETSIZE);
+                // seq_num += (bytes_sent - packet_header_size());
                 current_packet++;
 
                 number_of_sent_packets++;
@@ -229,33 +228,37 @@ void *handle_file_transmission(void *filename) {
         /* transmission done */
         //NEW
         //if(last_ACK+1>=total_number_of_packets) {
-        if(last_ACK>=total_number_of_packets){
-       // if (last_ACK >= file_length) {
-            transmission_done();
-            time_t end = time(NULL);
-            double elapsed = (end-start);
-            printf("\nELAPSED TIME: %f", elapsed);
-            printf("\nGOODPUT: %f\n", total_number_of_packets/elapsed);
-            printf("\nTOTAL SENT PACKETS: %d\n", number_of_sent_packets);
+        if (last_ACK >= total_number_of_packets) {
+            transmission_done(start);
             return 0;
         }
     }
 }
 
 /* send a FINAL packet to the receiver indicating the transmission was completed*/
-void transmission_done() {
+void transmission_done(time_t start) {
     memset(&send_data, 0, sizeof(struct packet));
     send_data.type = FINAL;
     send_data.sequence_number = 0;
     send_data.length = 0;
 
+    time_t end = time(NULL);
+    double elapsed = (end - start);
+
     printf("\n%s=============================", COLOR_ACTION);
     printf("\n[FILE TRANSMISSION COMPLETED]");
-    printf("\n============================");
+    printf("\n=============================");
     printf("\n%sBytes: %s%ld%s\n", COLOR_CONTENT, COLOR_NUMBER, file_length, COLOR_NEUTRAL);
     bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &receiver_address,
                         sizeof(struct sockaddr));
-    printf("%sPackets: %s%d%s", COLOR_CONTENT, COLOR_NUMBER, total_number_of_packets, COLOR_NEUTRAL);
+    printf("%sSent Packets (Unique): %s%d%s\n", COLOR_CONTENT, COLOR_NUMBER, total_number_of_packets, COLOR_NEUTRAL);
+    printf("%sSent Packets (Total): %s%d%s\n", COLOR_CONTENT, COLOR_NUMBER, number_of_sent_packets, COLOR_NEUTRAL);
+    if (elapsed < 0.00001) {
+        printf("%sElapsed time too short to calculate goodput.%s\n", COLOR_CONTENT, COLOR_NEUTRAL);
+    } else {
+        printf("%sElapsed Time: %s%f\n", COLOR_CONTENT, COLOR_NUMBER, elapsed);
+        printf("%sGoodput: %s%f%s", COLOR_CONTENT, COLOR_NUMBER, total_number_of_packets / elapsed, COLOR_NEUTRAL);
+    }
     printf("\n%s=============================\n\n%s", COLOR_ACTION, COLOR_NEUTRAL);
 }
 
