@@ -81,14 +81,14 @@ int random_loss(const double probability, int *counter) {
 
 void print_packet_info_sender(const struct packet *packet, action type) {
     if (type == SENDING) {
-        printf("%sSent:    %s pkt %s%d%s", COLOR_ACTION, COLOR_NEUTRAL, COLOR_NUMBER,
+        printf("%sSENT    %s   pkt %s%d%s", COLOR_ACTION, COLOR_NEUTRAL, COLOR_NUMBER,
                packet->sequence_number, COLOR_NEUTRAL);
         if (packet->length < PACKETSIZE && packet->length > 0)
             printf(" with size %s%d bytes%s", COLOR_NUMBER, packet->length,
-                   COLOR_NEUTRAL); // for last packet, not full size so specify
+                   COLOR_NEUTRAL);
         printf("\n");
     } else {
-        printf("%sReceived:%s ack %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
+        printf("%sRECEIVED%s   ack %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
                packet->sequence_number, COLOR_NEUTRAL);
         printf("\n");
     }
@@ -97,14 +97,14 @@ void print_packet_info_sender(const struct packet *packet, action type) {
 
 void print_packet_info_receiver(const struct packet *packet, action type) {
     if (type == RECEIVING) {
-        printf("%sReceiver:%s Received packet %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
+        printf("%sRECEIVED%s   pkt %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
                packet->sequence_number, COLOR_NEUTRAL);
         if (packet->length < PACKETSIZE && packet->length > 0)
             printf(" with size %s%d bytes%s", COLOR_NUMBER, packet->length,
                    COLOR_NEUTRAL); // for last packet, not full size so specify
         printf("\n");
     } else {
-        printf("%sReceiver:%s Sent ACK %s%d%s\n", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
+        printf("%sSENT    %s   ack %s%d%s", COLOR_ACTION, COLOR_NEUTRAL, COLOR_NUMBER,
                packet->sequence_number, COLOR_NEUTRAL);
         printf("\n");
     }
@@ -115,7 +115,7 @@ void print_packet_info_receiver(const struct packet *packet, action type) {
 void live(char *message, ...) {
     va_list ap;
     va_start(ap, message);
-    printf("%sSender: ", COLOR_ACTION);
+    printf("%s[ACTION] ", COLOR_ACTION);
     printf("%s", COLOR_NEUTRAL);
     vfprintf(stdout, message, ap);
     fprintf(stdout, "\n");

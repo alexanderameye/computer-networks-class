@@ -38,6 +38,11 @@ int main(int argc, char *argv[]) {
     init(argc, argv);
     initialize_receiver_socket();
 
+
+    printf("%s==================================================================", COLOR_ACTION);
+    printf("\n[TRANSMISSION START]");
+    printf("\n==================================================================%s\n", COLOR_NEUTRAL);
+
     while (1) {
         /* receive packet and generate loss */
         bytes_read = recvfrom(receiver_socket, &received_data, sizeof(struct packet), 0,
@@ -45,7 +50,7 @@ int main(int argc, char *argv[]) {
         packet_was_lost = random_loss(packet_loss_probability, &loss_count);
         print_packet_info_receiver(&received_data, RECEIVING);
         if (packet_was_lost && received_data.type != FINAL) {
-            printf("%sPACKET LOST%s\n\n", COLOR_NEGATIVE, COLOR_NEUTRAL);
+            printf("%sLOST    %s   pkt %s%d%s\n", COLOR_NEGATIVE, COLOR_NEUTRAL, COLOR_NUMBER, received_data.sequence_number, COLOR_NEUTRAL);
             continue;
         }
 
@@ -90,8 +95,10 @@ void transmission_done() {
     send_data.type = FINAL;
     send_data.sequence_number = 0;
     send_data.length = 0;
-    live("File transmission completed");
-    printf("Treated %s%d%s packets as lost\n", COLOR_NUMBER, loss_count, COLOR_NEUTRAL);
+    printf("\n%s==================================================================", COLOR_ACTION);
+    printf("\n[TRANSMISSION COMPLETED]");
+    printf("\n==================================================================");
+    printf("\nTreated %s%d%s packets as lost\n", COLOR_NUMBER, loss_count, COLOR_NEUTRAL);
     bytes_sent = sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                         sizeof(struct sockaddr));
     write_file_to_disk();
@@ -111,13 +118,13 @@ void init(int argc, char *argv[]) {
     srand48(time(NULL));
     if (argc != 2) usage_error();
     packet_loss_probability = atof(argv[1]);
-    printf("\n%s=================================", COLOR_ACTION);
+    printf("\n%s==================================================================", COLOR_ACTION);
     printf("\n[RECEIVER CREATED]");
-    printf("\n=================================");
+    printf("\n==================================================================");
     printf("\n%sRECEIVER IP: %s%s\n%sPACKET LOSS PROBABILITY: %s%.0f%%",
-           COLOR_CONTENT, COLOR_NEUTRAL, RECEIVER_IP, COLOR_CONTENT, COLOR_NEUTRAL,
+           COLOR_CONTENT, COLOR_NUMBER, RECEIVER_IP, COLOR_CONTENT, COLOR_NUMBER,
            (double) packet_loss_probability * 100);
-    printf("\n%s=================================%s\n\n", COLOR_ACTION, COLOR_NEUTRAL);
+    printf("\n%s==================================================================%s\n", COLOR_ACTION, COLOR_NEUTRAL);
 }
 
 /* Creates a receiver socket, initializes its address and binds it */
@@ -136,5 +143,5 @@ void initialize_receiver_socket() {
 
     if (bind(receiver_socket, (struct sockaddr *) &receiver_address, sizeof(receiver_address)) == -1)
         die("Socket bind failed");
-    else live("Socket bound\n");
+    else live("Socket bound");
 }

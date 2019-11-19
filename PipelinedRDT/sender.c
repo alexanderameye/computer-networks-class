@@ -59,21 +59,21 @@ void init(int argc, char *argv[]) {
     receiver = (struct hostent *) gethostbyname(argv[1]);
     timeout = atoi(argv[2]);
     window_size = atoi(argv[3]);
-    printf("\n%s======================", COLOR_ACTION);
+    printf("\n%s==================================================================", COLOR_ACTION);
     printf("\n[SENDER CREATED]");
-    printf("\n======================");
-    printf("\n%sRECEIVER IP: %s%s\n%sTIMEOUT: %s%d\n%sWINDOW SIZE: %s%d\n%sPORT NUMBER: %s%d",
-           COLOR_CONTENT, COLOR_NEUTRAL, receiver->h_name, COLOR_CONTENT, COLOR_NEUTRAL, timeout,
-           COLOR_CONTENT, COLOR_NEUTRAL,
-           window_size, COLOR_CONTENT, COLOR_NEUTRAL, PORT);
-    printf("\n%s======================%s\n\n", COLOR_ACTION, COLOR_NEUTRAL);
+    printf("\n==================================================================");
+    printf("\n%sRECEIVER IP: %s%s\n%sTIMEOUT: %s%d\n%sWINDOW SIZE: %s%d\n%sPORT: %s%d",
+           COLOR_CONTENT, COLOR_NUMBER, receiver->h_name, COLOR_CONTENT, COLOR_NUMBER, timeout,
+           COLOR_CONTENT, COLOR_NUMBER,
+           window_size, COLOR_CONTENT, COLOR_NUMBER, PORT);
+    printf("\n%s==================================================================%s\n", COLOR_ACTION, COLOR_NEUTRAL);
     window_end = window_size - 1;
 }
 
 /* Creates a sender socket and initializes its address */
 void initialize_sender_socket() {
     if ((sender_socket = socket(SOCKET_DOMAIN, SOCKET_TYPE, SOCKET_PROTOCOL)) == -1) die("Socket creation failed");
-    else live("Socket created\n");
+    else live("Socket created");
 
     memset((char *) &sender_address, 0, sizeof(sender_address));
     sender_address.sin_family = SOCKET_DOMAIN;
@@ -96,14 +96,14 @@ void initialize_receiver_address() {
 /* Continuously asks the user for a file to be transmitted */
 void ask_for_user_input() {
     while (1) {
-        live("Waiting for a file to be transmitted");
-        printf("%sFile name: %s", COLOR_CONTENT, COLOR_NEUTRAL);
+        live("Waiting for file");
+        printf("%sFile: %s", COLOR_CONTENT, COLOR_NEUTRAL);
         scanf("%s", filename);
 
         pthread_t main_thread;
         if (pthread_create(&main_thread, NULL, handle_file_transmission, (void *) filename) == -1)
             die("Thread creation failed");
-        else live("File transmission thread created");
+        else live("Transmission started");
         pthread_join(main_thread, NULL);
     }
 }
@@ -130,10 +130,14 @@ void *handle_file_transmission(void *filename) {
 
     /* DIVIDE FILE INTO PACKETS */
     total_number_of_packets = ((file_length - 1) / PACKETSIZE) + 1; // +1 to compensate for integer division
-    printf("%sPackets: %s%d%s packets of %s%d bytes%s, %s1%s packet of %s%ld bytes%s\n\n", COLOR_CONTENT, COLOR_NUMBER,
+    printf("%sPackets: %s%d%s packets of %s%d bytes%s, %s1%s packet of %s%ld bytes%s\n", COLOR_CONTENT, COLOR_NUMBER,
            total_number_of_packets - 1, COLOR_NEUTRAL, COLOR_NUMBER,
            PACKETSIZE, COLOR_NEUTRAL, COLOR_NUMBER, COLOR_NEUTRAL, COLOR_NUMBER,
            (file_length - 1) - ((total_number_of_packets - 1) * PACKETSIZE), COLOR_NEUTRAL);
+
+    printf("%s==================================================================", COLOR_ACTION);
+    printf("\n[TRANSMISSION START]");
+    printf("\n==================================================================%s\n", COLOR_NEUTRAL);
 
     goto servicerequest;
 
@@ -145,14 +149,14 @@ void *handle_file_transmission(void *filename) {
         if ((rv = poll(&ufd, 1, timeout)) == -1) die("Polling error");
         else if (rv == 0) //timeout so resend packets starting from last_ack + 1
         {
-            printf("\n%sTIMEOUT %d MILLISECONDS%s\n", COLOR_NEGATIVE, timeout, COLOR_NEUTRAL);
+            printf("\n%sTIMEOUT %s%dms%s", COLOR_NEGATIVE, COLOR_NUMBER, timeout, COLOR_NEUTRAL);
             received_data.sequence_number = last_ACK;
             seq_num = last_ACK;
             received_data.type = ACK;
             current_packet = window_start;
-            printf("\nResending at most %d packet(s) starting from sequence number %ld\n", window_size,
-                   last_ACK + PACKETSIZE);
-            printf("%s%.0f%% %sof packets have been reliably transferred.\n\n", COLOR_NUMBER,
+            printf("\nResending at most %d packet(s) starting from pkt %ld\n", window_size,
+                   last_ACK);
+            printf("%s%.0f%% %sof packets transmitted\n\n", COLOR_NUMBER,
                    ((double) last_ACK / total_number_of_packets) * 100, COLOR_NEUTRAL);
             // sleep(0.5);
         } else if (ufd.revents & POLLIN) {
@@ -215,21 +219,21 @@ void transmission_done(time_t start) {
     time_t end = time(NULL);
     double elapsed = (end - start);
 
-    printf("\n%s=============================", COLOR_ACTION);
-    printf("\n[FILE TRANSMISSION COMPLETED]");
-    printf("\n=============================");
+    printf("\n%s==================================================================", COLOR_ACTION);
+    printf("\n[TRANSMISSION COMPLETED]");
+    printf("\n==================================================================");
     printf("\n%sBytes: %s%ld%s\n", COLOR_CONTENT, COLOR_NUMBER, file_length, COLOR_NEUTRAL);
     bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &receiver_address,
                         sizeof(struct sockaddr));
-    printf("%sSent Packets (Unique): %s%d%s\n", COLOR_CONTENT, COLOR_NUMBER, total_number_of_packets, COLOR_NEUTRAL);
-    printf("%sSent Packets (Total): %s%d%s\n", COLOR_CONTENT, COLOR_NUMBER, number_of_sent_packets, COLOR_NEUTRAL);
+    printf("%sPackets (Unique): %s%d%s\n", COLOR_CONTENT, COLOR_NUMBER, total_number_of_packets, COLOR_NEUTRAL);
+    printf("%sPackets (Total): %s%d%s\n", COLOR_CONTENT, COLOR_NUMBER, number_of_sent_packets, COLOR_NEUTRAL);
     if (elapsed < 0.00001) {
         printf("%sElapsed time too short to calculate goodput.%s\n", COLOR_CONTENT, COLOR_NEUTRAL);
     } else {
         printf("%sElapsed Time: %s%f\n", COLOR_CONTENT, COLOR_NUMBER, elapsed);
         printf("%sGoodput: %s%f%s", COLOR_CONTENT, COLOR_NUMBER, total_number_of_packets / elapsed, COLOR_NEUTRAL);
     }
-    printf("\n%s=============================\n\n%s", COLOR_ACTION, COLOR_NEUTRAL);
+    printf("%s==================================================================\n\n%s", COLOR_ACTION, COLOR_NEUTRAL);
 }
 
 
