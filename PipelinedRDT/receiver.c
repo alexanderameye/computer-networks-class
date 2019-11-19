@@ -43,12 +43,11 @@ int main(int argc, char *argv[]) {
         bytes_read = recvfrom(receiver_socket, &received_data, sizeof(struct packet), 0,
                               (struct sockaddr *) &sender_address, &addr_size);
         packet_was_lost = random_loss(packet_loss_probability, &loss_count);
-        //   print_packet_info_receiver(&received_data, RECEIVING);
+        print_packet_info_receiver(&received_data, RECEIVING);
         if (packet_was_lost && received_data.type != FINAL) {
             printf("%sPACKET LOST%s\n\n", COLOR_NEGATIVE, COLOR_NEUTRAL);
             continue;
         }
-
 
         /* transmission done */
         if (received_data.type == FINAL) {
@@ -64,36 +63,24 @@ int main(int argc, char *argv[]) {
         /* send acknowledgement */
         memset(&send_data, 0, sizeof(struct packet));
         send_data.type = ACK;
-        send_data.length = 0; // ack has no length
-
-
+        send_data.length = 0;
 
         if (received_data.sequence_number <= expected_packet) {
             /* previous packet not lost */
-            //NEW
             memcpy(file_buffer + received_data.sequence_number * PACKETSIZE, received_data.data, received_data.length);
-            // memcpy(file_buffer + received_data.sequence_number, received_data.data, received_data.length);
-
-
-            //NEW
             send_data.sequence_number = received_data.sequence_number + 1;
-            //   send_data.sequence_number = received_data.sequence_number + PACKETSIZE;
-
-
             expected_packet = send_data.sequence_number;
-
 
             sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                    sizeof(struct sockaddr));
-             print_packet_info_receiver(&send_data, SENDING);
+            print_packet_info_receiver(&send_data, SENDING);
         } else {
             /* previous packet lost */
             send_data.sequence_number = expected_packet;
             sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                    sizeof(struct sockaddr));
-             print_packet_info_receiver(&send_data, SENDING);
+            print_packet_info_receiver(&send_data, SENDING);
         }
-
     }
 }
 

@@ -163,32 +163,14 @@ void *handle_file_transmission(void *filename) {
         print_packet_info_sender(&received_data, RECEIVING);
 
         servicerequest:
-        //NEW
+
         if (last_ACK < total_number_of_packets) {
-            //   if (last_ACK < file_length) {
-
-            //NEW
-            request_number = received_data.sequence_number; //initially the sequence number is 0 so request number is also 0
-            // request_number = received_data.sequence_number / (int) PACKETSIZE;
-
-
-            /* if previous packet was ACKED then shift window to the right */
-            /* ack received so shift window and send next pkt */
-
-            //NEW
-            //for example lastACK is 0, then ack 1 arrives
+            request_number = received_data.sequence_number;
             if (request_number > window_start && last_ACK == received_data.sequence_number - 1) {
                 window_end = window_end + (request_number - window_start);
                 window_start = request_number;
                 last_ACK += 1;
             }
-
-            /*if (request_number > window_start &&
-                (last_ACK) == (received_data.sequence_number - PACKETSIZE)) { //for example last_ACK is 0, then received data seq number is 1400
-                window_end = window_end + (request_number - window_start);
-                window_start = request_number;
-                last_ACK += PACKETSIZE;
-            }*/
 
             /* while there are packets to send and we are within the current window */
             while (current_packet < total_number_of_packets && current_packet <= window_end &&
@@ -197,17 +179,10 @@ void *handle_file_transmission(void *filename) {
                 send_data.type = DATA;
                 send_data.sequence_number = seq_num;
                 if (current_packet == window_start) seq_num = last_ACK;
-                //NEW
                 int buffadd = seq_num * PACKETSIZE;
-                //int buffadd = seq_num ;
                 char *chunk = &file_buffer[buffadd];
-
-                //NEW
                 if ((file_length - (seq_num * PACKETSIZE)) < PACKETSIZE) send_data.length = (file_length % PACKETSIZE);
-                    // if ((file_length - seq_num) < PACKETSIZE) send_data.length = (file_length % PACKETSIZE);
                 else send_data.length = PACKETSIZE;
-
-
                 memcpy(send_data.data, chunk, send_data.length);
                 send_data.total_length = file_length;
 
@@ -216,18 +191,13 @@ void *handle_file_transmission(void *filename) {
 
                 print_packet_info_sender(&send_data, SENDING);
 
-                //NEW
                 seq_num += ((bytes_sent - packet_header_size()) / PACKETSIZE);
-                // seq_num += (bytes_sent - packet_header_size());
                 current_packet++;
-
                 number_of_sent_packets++;
             }
         }
 
         /* transmission done */
-        //NEW
-        //if(last_ACK+1>=total_number_of_packets) {
         if (last_ACK >= total_number_of_packets) {
             transmission_done(start);
             return 0;
