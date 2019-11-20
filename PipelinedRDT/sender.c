@@ -8,6 +8,8 @@
 #include <netdb.h>
 #include <sys/poll.h>
 #include <unistd.h>
+#include <sys/timeb.h>
+
 
 /* FUNCTIONS */
 void init(int argc, char *argv[]);
@@ -96,12 +98,17 @@ void initialize_receiver_address() {
 
 /* Handles the file transmission to the receiver */
 void *handle_file_transmission(void *name) {
+    /* log file */
     FILE *log_file;
     char log_file_name[150] = "send_log_";
     strcat(log_file_name, name);
-    strcat(log_file_name,".txt");
+    strcat(log_file_name, ".txt");
     log_file = fopen(log_file_name, "wb");
 
+    /* timing */
+    struct timeb start_time, current_time;
+    ftime(&start_time);
+    double elapsed_time;
 
     int total_number_of_packets = -1, number_of_sent_packets = 0;
     int window_start = 0, window_end = 0;
@@ -112,8 +119,6 @@ void *handle_file_transmission(void *name) {
     struct pollfd ufd;
     int rv;
 
-    /* GOODPUT */
-    time_t start = time(NULL);
     long last_ACK = -1;
     received_data.sequence_number = -1;
 
@@ -137,7 +142,6 @@ void *handle_file_transmission(void *name) {
 
     goto servicerequest;
 
-
     while (1) {
         memset(&received_data, 0, sizeof(struct packet));
         ufd.fd = sender_socket;
@@ -158,9 +162,11 @@ void *handle_file_transmission(void *name) {
                                   (struct sockaddr *) &receiver_address, &addr_size);
         }
 
-        fprintf(log_file, "ack: %d | received\n", received_data.sequence_number);
-
-//        print_packet_info_sender(&received_data, RECEIVING);
+        ftime(&current_time);
+        elapsed_time =
+                ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) / 1000;
+        fprintf(log_file, "%.3f  |  ack: %d  |  received\n", elapsed_time,
+                received_data.sequence_number);
 
         servicerequest:
         if (last_ACK + 1 < total_number_of_packets) {
@@ -192,9 +198,12 @@ void *handle_file_transmission(void *name) {
                 bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0, (
                         struct sockaddr *) &receiver_address, sizeof(struct sockaddr));
 
-                fprintf(log_file, "pkt: %d | sent\n", send_data.sequence_number);
+                ftime(&current_time);
+                elapsed_time = ((1000.0 * (current_time.time - start_time.time) +
+                                 (current_time.millitm - start_time.millitm))) / 1000;
+                fprintf(log_file, "%.3f  |  pkt: %d  |  sent\n", elapsed_time,
+                        send_data.sequence_number);
 
-                //  print_packet_info_sender(&send_data, SENDING);
 
                 seq_num += ((bytes_sent - packet_header_size()) / PACKETSIZE);
                 current_packet++;
@@ -209,33 +218,24 @@ void *handle_file_transmission(void *name) {
             send_data.sequence_number = 0;
             send_data.length = 0;
 
-            time_t end = time(NULL);
-            double elapsed = (end - start);
 
-            /* printf("\n%s==================================================================", COLOR_ACTION);
+            ftime(&current_time);
+            elapsed_time =
+                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
+                    1000;
+            fprintf(log_file, "%.3f  |  pkt: %d  |  sent\n", elapsed_time,
+                    send_data.sequence_number);
 
-             printf("\n[TRANSMISSION COMPLETED]");
-             printf("\n==================================================================");
-             printf("\n%sBytes: %s%ld%s\n", COLOR_CONTENT, COLOR_NUMBER, file_length, COLOR_NEUTRAL);*/
             bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0,
                                 (struct sockaddr *) &receiver_address,
                                 sizeof(struct sockaddr));
 
             fprintf(log_file, "\nTotal packets: %d\n", number_of_sent_packets);
             fprintf(log_file, "Unique packets: %d\n", total_number_of_packets);
-            fprintf(log_file, "Elapsed time: %f\n", elapsed);
-            if(elapsed < 0.0001) fprintf(log_file, "Elapsed time too short to calculate accurate goodput.\n");
-            else fprintf(log_file, "Goodput: %f\n", total_number_of_packets / elapsed);
+            fprintf(log_file, "Elapsed time: %.3f seconds \n", elapsed_time);
+            fprintf(log_file, "Throughput: %.2f pkts/sec\n", number_of_sent_packets / elapsed_time);
+            fprintf(log_file, "Goodput: %.2f pkts/sec\n", total_number_of_packets / elapsed_time);
 
-            /*  printf("%sPackets (Unique): %s%d%s\n", COLOR_CONTENT, COLOR_NUMBER, total_number_of_packets, COLOR_NEUTRAL);
-              printf("%sPackets (Total): %s%d%s\n", COLOR_CONTENT, COLOR_NUMBER, number_of_sent_packets, COLOR_NEUTRAL);
-              if (elapsed < 0.00001) {
-                  printf("%sElapsed time too short to calculate goodput.%s\n", COLOR_CONTENT, COLOR_NEUTRAL);
-              } else {
-                  printf("%sElapsed Time: %s%f\n", COLOR_CONTENT, COLOR_NUMBER, elapsed);
-                  printf("%sGoodput: %s%f%s\n", COLOR_CONTENT, COLOR_NUMBER, total_number_of_packets / elapsed, COLOR_NEUTRAL);
-              }
-              printf("%s==================================================================\n\n%s", COLOR_ACTION, COLOR_NEUTRAL);*/
             fclose(log_file);
             return 0;
         }
