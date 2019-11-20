@@ -38,7 +38,6 @@ int main(int argc, char *argv[]) {
     init(argc, argv);
     initialize_receiver_socket();
 
-
     printf("%s==================================================================", COLOR_ACTION);
     printf("\n[TRANSMISSION START]");
     printf("\n==================================================================%s\n", COLOR_NEUTRAL);
@@ -50,11 +49,12 @@ int main(int argc, char *argv[]) {
         packet_was_lost = random_loss(packet_loss_probability, &loss_count);
         print_packet_info_receiver(&received_data, RECEIVING);
         if (packet_was_lost && received_data.type != FINAL) {
-            printf("%sLOST    %s   pkt %s%d%s\n", COLOR_NEGATIVE, COLOR_NEUTRAL, COLOR_NUMBER, received_data.sequence_number, COLOR_NEUTRAL);
+            printf("%sLOST    %s   pkt %s%d%s\n", COLOR_NEGATIVE, COLOR_NEUTRAL, COLOR_NUMBER,
+                   received_data.sequence_number, COLOR_NEUTRAL);
             continue;
         }
 
-        if(expected_packet == -1) expected_packet = 0;
+        if (expected_packet == -1) expected_packet = 0;
         /* transmission done */
         if (received_data.type == FINAL) {
             transmission_done();
@@ -71,24 +71,17 @@ int main(int argc, char *argv[]) {
         send_data.type = ACK;
         send_data.length = 0;
 
-
         if (received_data.sequence_number <= expected_packet) {
-           // printf("TRUE");
-
             /* previous packet not lost */
             memcpy(file_buffer + received_data.sequence_number * PACKETSIZE, received_data.data, received_data.length);
-            send_data.sequence_number = received_data.sequence_number; //send ack back with same number
-           // send_data.sequence_number = received_data.sequence_number + 1;
-            expected_packet = send_data.sequence_number +1;//expect next ack
-          //  expected_packet = send_data.sequence_number;
-
+            send_data.sequence_number = received_data.sequence_number;
+            expected_packet = send_data.sequence_number + 1;
             sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                    sizeof(struct sockaddr));
             print_packet_info_receiver(&send_data, SENDING);
         } else {
             /* previous packet lost */
-            //send_data.sequence_number = expected_packet;
-            send_data.sequence_number = expected_packet-1; //still expect same package
+            send_data.sequence_number = expected_packet - 1;
             sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                    sizeof(struct sockaddr));
             print_packet_info_receiver(&send_data, SENDING);

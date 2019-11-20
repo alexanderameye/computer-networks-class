@@ -1,6 +1,6 @@
 #ifndef PIPELINEDRDT_COMMON_H
 #define PIPELINEDRDT_COMMON_H
-
+#include <string.h>
 #include <stdarg.h>
 
 #define PORT 10080 // Hard-coded port number
@@ -93,6 +93,16 @@ void print_packet_info_sender(const struct packet *packet, action type) {
         printf("\n");
     }
     return;
+}
+
+void removeChar(char *s, int c){
+
+    int j, n = strlen(s);
+    for (int i=j=0; i<n; i++)
+        if (s[i] != c)
+            s[j++] = s[i];
+
+    s[j] = '\0';
 }
 
 void print_packet_info_receiver(const struct packet *packet, action type) {
