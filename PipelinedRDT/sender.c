@@ -150,8 +150,37 @@ void *handle_file_transmission(void *name) {
         ufd.fd = sender_socket;
         ufd.events = POLLIN;
         if ((rv = poll(&ufd, 1, timeout)) == -1) die("Polling error");
-        else if (rv == 0) {
-            //printf("\n%sTIMEOUT %s%dms%s", COLOR_NEGATIVE, COLOR_NUMBER, timeout, COLOR_NEUTRAL);
+        else if (ufd.revents & POLLIN) { //received somethign
+            bytes_read = recvfrom(sender_socket, &received_data, sizeof(struct packet), 0,
+                                  (struct sockaddr *) &receiver_address, &addr_size);
+
+            ftime(&current_time);
+            elapsed_time =
+                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
+                    1000;
+            fprintf(log_file, "%.3f\t|  ack: %d\t|  received\n", elapsed_time,
+                    received_data.sequence_number);
+
+            if (received_data.sequence_number == last_ACK) //duplicate ACK
+            {
+                number_of_duplicate_acks += 1;
+            }
+
+            if (number_of_duplicate_acks >= 3) //retransmit
+            {
+                ftime(&current_time);
+                elapsed_time =
+                        ((1000.0 * (current_time.time - start_time.time) +
+                          (current_time.millitm - start_time.millitm))) /
+                        1000;
+                // fprintf(log_file, "%.3f\t|  pkt: %d\t|  3 duplicated acks\n", elapsed_time,
+                //       received_data.sequence_number);
+
+
+            }
+
+
+        } else if (rv == 0) {
             received_data.sequence_number = last_ACK;
             seq_num = last_ACK + 1;
             received_data.type = ACK;
@@ -161,42 +190,16 @@ void *handle_file_transmission(void *name) {
             elapsed_time =
                     ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
                     1000;
-            fprintf(log_file, "%.3f\t|  pkt: %d\t|  TIMEOUT\n", elapsed_time,
-                    received_data.sequence_number + 1);
-
-
+            fprintf(log_file, "%.3f\t|  pkt: %d\t|  timeout since %.3f\n", elapsed_time,
+                    received_data.sequence_number + 1, elapsed_time - ((double) timeout / 1000));
 
             //printf("\nResending at most %d packet(s) starting from pkt %ld\n", window_size,
             //    last_ACK + 1);
             // printf("%s%.0f%% %sof packets transmitted\n\n", COLOR_NUMBER,
             //  ((double) last_ACK / total_number_of_packets) * 100, COLOR_NEUTRAL);
-        } else if (ufd.revents & POLLIN) {
-            bytes_read = recvfrom(sender_socket, &received_data, sizeof(struct packet), 0,
-                                  (struct sockaddr *) &receiver_address, &addr_size);
+            // sleep(2);
         }
 
-        ftime(&current_time);
-        elapsed_time =
-                ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) / 1000;
-        fprintf(log_file, "%.3f\t|  ack: %d\t|  received\n", elapsed_time,
-                received_data.sequence_number);
-
-        if (received_data.sequence_number == last_ACK) //duplicate ACK
-        {
-            number_of_duplicate_acks += 1;
-        }
-
-        if (number_of_duplicate_acks >= 3) //retransmit
-        {
-            ftime(&current_time);
-            elapsed_time =
-                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
-                    1000;
-           // fprintf(log_file, "%.3f\t|  pkt: %d\t|  3 duplicated acks\n", elapsed_time,
-             //       received_data.sequence_number);
-
-
-        }
 
         servicerequest:
         if (last_ACK + 1 < total_number_of_packets) {
@@ -231,8 +234,13 @@ void *handle_file_transmission(void *name) {
                 ftime(&current_time);
                 elapsed_time = ((1000.0 * (current_time.time - start_time.time) +
                                  (current_time.millitm - start_time.millitm))) / 1000;
-                fprintf(log_file, "%.3f\t|  pkt: %d\t|  sent\n", elapsed_time,
-                        send_data.sequence_number);
+
+                if (current_packet == window_start && number_of_sent_packets != 0) {
+                    fprintf(log_file, "%.3f\t|  pkt: %d\t|  retransmitted\n", elapsed_time,
+                            send_data.sequence_number);
+                } else
+                    fprintf(log_file, "%.3f\t|  pkt: %d\t|  sent\n", elapsed_time,
+                            send_data.sequence_number);
 
 
                 seq_num += ((bytes_sent - packet_header_size()) / PACKETSIZE);

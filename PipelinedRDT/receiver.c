@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
             ftime(&current_time);
             elapsed_time =
                     ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) / 1000;
-            fprintf(log_file, "%.3f\t|  pkt: %d\t|  lost\n", elapsed_time, received_data.sequence_number);
+            fprintf(log_file, "%.3f\t|  pkt: %d\t|  arrived but dropped\n", elapsed_time, received_data.sequence_number);
             printf("%sLOST    %s   pkt %s%d%s\n", COLOR_NEGATIVE, COLOR_NEUTRAL, COLOR_NUMBER,
                    received_data.sequence_number, COLOR_NEUTRAL);
             continue;
