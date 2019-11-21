@@ -152,7 +152,7 @@ int main(int argc, char *argv[]) {
             elapsed_time =
                     ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
                     1000;
-            fprintf(log_file, "%.3f\t|  ack: %d\t|  sent\n", elapsed_time,
+            fprintf(log_file, "%.3f\t|  ack: %d\t|  resent last ack\n", elapsed_time,
                     send_data.sequence_number);
         }
     }
