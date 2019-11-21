@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     strcat(log_file_name, ".txt");
     log_file = fopen(log_file_name, "wb");
 
-    fprintf(log_file, "Packet loss probability: %.4f%%\n\n",  (double) packet_loss_probability * 100);
+    fprintf(log_file, "Packet loss probability: %.2f%%\n\n",  (double) packet_loss_probability * 100);
 
     /* timing */
     struct timeb start_time, current_time;
@@ -57,24 +57,36 @@ int main(int argc, char *argv[]) {
     double elapsed_time;
 
     while (1) {
+
+
         /* receive packet and generate loss */
         bytes_read = recvfrom(receiver_socket, &received_data, sizeof(struct packet), 0,
                               (struct sockaddr *) &sender_address, &addr_size);
         packet_was_lost = random_loss(packet_loss_probability, &loss_count);
 
+        if (expected_packet == -1)
+        {ftime(&start_time);
+            expected_packet = 0;
+        }
+
+
         ftime(&current_time);
         elapsed_time =
                 ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) / 1000;
-        fprintf(log_file, "%.3f  |  pkt: %d  |  received\n", elapsed_time,
+        fprintf(log_file, "%.3f\t|  pkt: %d\t|  received\n", elapsed_time,
                 received_data.sequence_number);
 
         if (packet_was_lost && received_data.type != FINAL) {
+            ftime(&current_time);
+            elapsed_time =
+                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) / 1000;
+            fprintf(log_file, "%.3f\t|  pkt: %d\t|  lost\n", elapsed_time, received_data.sequence_number);
             printf("%sLOST    %s   pkt %s%d%s\n", COLOR_NEGATIVE, COLOR_NEUTRAL, COLOR_NUMBER,
                    received_data.sequence_number, COLOR_NEUTRAL);
             continue;
         }
 
-        if (expected_packet == -1) expected_packet = 0;
+
         /* transmission done */
         if (received_data.type == FINAL) {
             memset(&send_data, 0, sizeof(struct packet));
@@ -90,7 +102,7 @@ int main(int argc, char *argv[]) {
             elapsed_time =
                     ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
                     1000;
-            fprintf(log_file, "%.3f  |  pkt: %d  |  sent\n", elapsed_time,
+            fprintf(log_file, "%.3f\t|  pkt: %d\t|  sent\n", elapsed_time,
                     send_data.sequence_number);
 
             fprintf(log_file, "\nTotal packets: %d\n", number_of_sent_packets);
@@ -128,7 +140,7 @@ int main(int argc, char *argv[]) {
             elapsed_time =
                     ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
                     1000;
-            fprintf(log_file, "%.3f  |  ack: %d  |  sent\n", elapsed_time,
+            fprintf(log_file, "%.3f\t|  ack: %d\t|  sent\n", elapsed_time,
                     send_data.sequence_number);
         } else {
             /* previous packet lost */
@@ -140,7 +152,7 @@ int main(int argc, char *argv[]) {
             elapsed_time =
                     ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
                     1000;
-            fprintf(log_file, "%.3f  |  ack: %d  |  sent\n", elapsed_time,
+            fprintf(log_file, "%.3f\t|  ack: %d\t|  sent\n", elapsed_time,
                     send_data.sequence_number);
         }
     }
@@ -160,9 +172,9 @@ void init(int argc, char *argv[]) {
     if (argc != 2) usage_error();
     packet_loss_probability = atof(argv[1]);
     printf("\n%s==================================================================", COLOR_ACTION);
-    printf("\n%sRECEIVER IP: %s%s\n%sPACKET LOSS PROBABILITY: %s%.0f%%",
+    printf("\n%sRECEIVER IP: %s%s\n%sPACKET LOSS PROBABILITY: %s%.2f%%\n%sBUFFER SIZE: \nUPDATED BUFFER SIZE:%s",
            COLOR_CONTENT, COLOR_NUMBER, RECEIVER_IP, COLOR_CONTENT, COLOR_NUMBER,
-           (double) packet_loss_probability * 100);
+           (double) packet_loss_probability * 100, COLOR_CONTENT, COLOR_NEUTRAL);
     printf("\n%s===================================================================\n\n", COLOR_ACTION);
 }
 

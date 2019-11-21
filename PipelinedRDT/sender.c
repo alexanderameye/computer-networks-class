@@ -98,6 +98,9 @@ void initialize_receiver_address() {
 
 /* Handles the file transmission to the receiver */
 void *handle_file_transmission(void *name) {
+
+    int number_of_duplicate_acks = 0;
+
     /* log file */
     FILE *log_file;
     char log_file_name[150] = "send_log_";
@@ -153,6 +156,16 @@ void *handle_file_transmission(void *name) {
             seq_num = last_ACK + 1;
             received_data.type = ACK;
             current_packet = window_start;
+
+            ftime(&current_time);
+            elapsed_time =
+                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
+                    1000;
+            fprintf(log_file, "%.3f\t|  pkt: %d\t|  TIMEOUT\n", elapsed_time,
+                    received_data.sequence_number + 1);
+
+
+
             //printf("\nResending at most %d packet(s) starting from pkt %ld\n", window_size,
             //    last_ACK + 1);
             // printf("%s%.0f%% %sof packets transmitted\n\n", COLOR_NUMBER,
@@ -165,8 +178,25 @@ void *handle_file_transmission(void *name) {
         ftime(&current_time);
         elapsed_time =
                 ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) / 1000;
-        fprintf(log_file, "%.3f  |  ack: %d  |  received\n", elapsed_time,
+        fprintf(log_file, "%.3f\t|  ack: %d\t|  received\n", elapsed_time,
                 received_data.sequence_number);
+
+        if (received_data.sequence_number == last_ACK) //duplicate ACK
+        {
+            number_of_duplicate_acks += 1;
+        }
+
+        if (number_of_duplicate_acks >= 3) //retransmit
+        {
+            ftime(&current_time);
+            elapsed_time =
+                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
+                    1000;
+           // fprintf(log_file, "%.3f\t|  pkt: %d\t|  3 duplicated acks\n", elapsed_time,
+             //       received_data.sequence_number);
+
+
+        }
 
         servicerequest:
         if (last_ACK + 1 < total_number_of_packets) {
@@ -201,7 +231,7 @@ void *handle_file_transmission(void *name) {
                 ftime(&current_time);
                 elapsed_time = ((1000.0 * (current_time.time - start_time.time) +
                                  (current_time.millitm - start_time.millitm))) / 1000;
-                fprintf(log_file, "%.3f  |  pkt: %d  |  sent\n", elapsed_time,
+                fprintf(log_file, "%.3f\t|  pkt: %d\t|  sent\n", elapsed_time,
                         send_data.sequence_number);
 
 
@@ -223,7 +253,7 @@ void *handle_file_transmission(void *name) {
             elapsed_time =
                     ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
                     1000;
-            fprintf(log_file, "%.3f  |  pkt: %d  |  sent\n", elapsed_time,
+            fprintf(log_file, "%.3f\t|  pkt: %d\t|  sent\n", elapsed_time,
                     send_data.sequence_number);
 
             bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0,
