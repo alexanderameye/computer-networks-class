@@ -138,9 +138,9 @@ void *handle_file_transmission(void *name) {
             PACKETSIZE, file_length - ((number_of_unique_packets - 3) * PACKETSIZE));
     fprintf(log_file, "Other: 1 packet of %ld bytes and 1 packet of 0 bytes\n", strlen(name));
     fprintf(log_file, "Total: %d packets \n\n", number_of_unique_packets);
-    fprintf(log_file, "=========================================================\n");
-    fprintf(log_file, "| Time\t| Type | Index\t| Action   | Extra\t\t|\n");
-    fprintf(log_file, "=========================================================\n");
+    fprintf(log_file, "=================================================================\n");
+    fprintf(log_file, "| Time\t| Type | Index\t| Action   | Extra\t\t\t|\n");
+    fprintf(log_file, "=================================================================\n");
 
 
     goto send_packets;
@@ -159,7 +159,7 @@ void *handle_file_transmission(void *name) {
             if (received_ack == last_ACK) {
                 /* duplicate ack */
                 number_of_duplicate_acks += 1;
-                fprintf(log_file, "| %.3f\t| ack  | %d\t| received  | duplicate %d\t|\n",
+                fprintf(log_file, "| %.3f\t| ack  | %d\t| received | duplicate %d\t\t|\n",
                         calculate_elapsed_time(start_time, current_time),
                         received_data.sequence_number, number_of_duplicate_acks);
             } else if (received_ack == last_ACK + 1 && received_ack >= window_start) {
@@ -167,7 +167,7 @@ void *handle_file_transmission(void *name) {
                 window_end = window_end + (received_ack + 1 - window_start);
                 window_start = received_ack + 1;
                 last_ACK += 1;
-                fprintf(log_file, "| %.3f\t| ack  | %d\t| received | window [%d,%d]\t|\n",
+                fprintf(log_file, "| %.3f\t| ack  | %d\t| received | window [%d,%d]\t\t|\n",
                         calculate_elapsed_time(start_time, current_time),
                         received_data.sequence_number, window_start, window_end);
             }
@@ -179,7 +179,7 @@ void *handle_file_transmission(void *name) {
             current_packet = window_start;
 
             ftime(&current_time);
-            fprintf(log_file, "| %.3f\t| pkt  | %ld\t| timeout  | since %.3f\t|\n",
+            fprintf(log_file, "| %.3f\t| pkt  | %ld\t| timeout  | since %.3f\t\t|\n",
                     calculate_elapsed_time(start_time, current_time),
                     last_ACK + 1, calculate_elapsed_time(start_time, current_time) - timeout);
         }
@@ -199,7 +199,7 @@ void *handle_file_transmission(void *name) {
                 if (current_packet == window_start) seq_num = last_ACK + 1;
 
                 if (seq_num == 0) {
-                    /* file name */
+                    /* file name packet */
                     send_data.length = strlen(name);
 
                     memcpy(send_data.data, name, send_data.length);
@@ -224,7 +224,7 @@ void *handle_file_transmission(void *name) {
                             calculate_elapsed_time(start_time, current_time),
                             send_data.sequence_number, send_data.length);
                 } else
-                    fprintf(log_file, "| %.3f\t| pkt  | %d\t| sent     | %d bytes\t\t|\n",
+                    fprintf(log_file, "| %.3f\t| pkt  | %d\t| sent     | %d bytes\t\t\t|\n",
                             calculate_elapsed_time(start_time, current_time),
                             send_data.sequence_number, send_data.length);
 
@@ -235,6 +235,7 @@ void *handle_file_transmission(void *name) {
         } else {
             /* transmission done, send final packet */
             memset(&send_data, 0, sizeof(struct packet));
+            send_data.sequence_number = number_of_unique_packets - 1;
             send_data.type = FINAL;
 
             bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0,
@@ -245,17 +246,19 @@ void *handle_file_transmission(void *name) {
 
             ftime(&current_time);
             double elapsed_time = calculate_elapsed_time(start_time, current_time);
-            fprintf(log_file, "| %.3f\t| pkt  | %d\t| sent     | final\t\t|\n", elapsed_time,
+            fprintf(log_file, "| %.3f\t| pkt  | %d\t| sent     | final\t\t\t|\n", elapsed_time,
                     send_data.sequence_number);
-            fprintf(log_file, "=========================================================\n");
+            fprintf(log_file, "=================================================================\n");
 
             fprintf(log_file, "\nSent packets: %d\n", number_of_sent_packets);
             fprintf(log_file, "Unique packets: %d\n", number_of_unique_packets);
             fprintf(log_file, "Elapsed time: %.3f seconds \n", elapsed_time);
             fprintf(log_file, "Throughput: %.2f pkts/sec\n", number_of_sent_packets / elapsed_time);
             fprintf(log_file, "Goodput: %.2f pkts/sec\n", number_of_unique_packets / elapsed_time);
-            fprintf(log_file, "Badput: %.2f pkts/sec\n", (number_of_sent_packets-number_of_unique_packets) / elapsed_time);
-            fprintf(log_file, "Efficiency: %.2f%%\n", ((double) number_of_unique_packets/ (double) number_of_sent_packets)*100);
+            fprintf(log_file, "Badput: %.2f pkts/sec\n",
+                    (number_of_sent_packets - number_of_unique_packets) / elapsed_time);
+            fprintf(log_file, "Efficiency: %.2f%%\n",
+                    ((double) number_of_unique_packets / (double) number_of_sent_packets) * 100);
 
             fclose(log_file);
             return 0;
