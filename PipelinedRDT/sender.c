@@ -105,7 +105,6 @@ void *handle_file_transmission(void *name) {
     struct timeb start_time, current_time;
     ftime(&start_time);
 
-
     /* HOUSEKEEPING */
     int number_of_duplicate_acks = 0, received_ack = 0, current_packet = 0;
     int number_of_unique_packets, number_of_sent_packets = 0;

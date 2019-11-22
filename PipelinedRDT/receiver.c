@@ -13,39 +13,45 @@ void init(int argc, char *argv[]);
 
 void initialize_receiver_socket();
 
-void transmission_done();
+double calculate_elapsed_time(struct timeb start, struct timeb current);
 
-/* PACKET LOSS */
-double packet_loss_probability;
-int packet_was_lost = 0;
-int loss_count = 0;
+/* SENDER */
+struct sockaddr_in sender_address;
 
-/* SENDING AND RECEIVING */
+
+/* RECEIVER */
 int receiver_socket;
-struct sockaddr_in receiver_address, sender_address;
+struct sockaddr_in receiver_address;
 struct packet received_data, send_data;
+double packet_loss_probability;
+int packet_was_lost = 0, loss_count;
 int bytes_read, bytes_sent;
 long expected_packet = -1;
 socklen_t addr_size = sizeof(struct sockaddr);
+int number_of_sent_packets = 0;
 
-/* FILE*/
+
+/* FILE */
 char *file_buffer = NULL;
 FILE *file;
 long buffer_size = 0;
 
-int number_of_sent_packets = 0;
-
+/* Program entry point  */
 int main(int argc, char *argv[]) {
     init(argc, argv);
     initialize_receiver_socket();
 
-    /* timing */
+    /* LOG FILE */
+    FILE *log_file;
+
+    /* FILE */
+    char file_name[150];
+
+    /* TIMING */
     struct timeb start_time, current_time;
     ftime(&start_time);
     double elapsed_time;
 
-    FILE *log_file;
-    char name[150];
     while (1) {
         /* receive packet and generate loss */
         bytes_read = recvfrom(receiver_socket, &received_data, sizeof(struct packet), 0,
@@ -53,116 +59,98 @@ int main(int argc, char *argv[]) {
         packet_was_lost = random_loss(packet_loss_probability, &loss_count);
 
         if (expected_packet == -1) {
+            /* file name packet */
             ftime(&start_time);
             expected_packet = 0;
-            strcpy(name, received_data.data);
-
+            strcpy(file_name, received_data.data);
 
             char log_file_name[150] = "receive_log_";
-            strcat(log_file_name, name);
+            strcat(log_file_name, file_name);
             strcat(log_file_name, ".txt");
             log_file = fopen(log_file_name, "wb");
-           // log_file = fopen(log_file_name, "wb");
 
-            fprintf(log_file, "Receiving file: %s\n", name);
+            fprintf(log_file, "Receiving file: %s\n", file_name);
             fprintf(log_file, "Packet loss probability: %.2f%%\n\n", (double) packet_loss_probability * 100);
+            fprintf(log_file, "=================================================================\n");
+            fprintf(log_file, "| Time\t| Type | Index\t| Action   | Extra\t\t\t|\n");
+            fprintf(log_file, "=================================================================\n");
         }
 
-
         ftime(&current_time);
-        elapsed_time =
-                ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) / 1000;
-        fprintf(log_file, "%.3f\t|  pkt: %d\t|  received\n", elapsed_time,
-                received_data.sequence_number);
 
         if (packet_was_lost && received_data.type != FINAL) {
-            ftime(&current_time);
-            elapsed_time =
-                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
-                    1000;
-            fprintf(log_file, "%.3f\t|  pkt: %d\t|  dropped\n", elapsed_time,
-                    received_data.sequence_number);
+            /* packet dropped */
+            fprintf(log_file, "| %.3f\t| pkt  | %d\t| received | dropped\t\t\t|\n",
+                    calculate_elapsed_time(start_time, current_time), received_data.sequence_number);
             printf("%sLOST    %s   pkt %s%d%s\n", COLOR_NEGATIVE, COLOR_NEUTRAL, COLOR_NUMBER,
                    received_data.sequence_number, COLOR_NEUTRAL);
             continue;
-        }
+        } else if (!packet_was_lost && received_data.type != FINAL) {
+            /* send ack and read packet */
+            fprintf(log_file, "| %.3f\t| pkt  | %d\t| received | %d bytes\t\t\t|\n",
+                    calculate_elapsed_time(start_time, current_time), received_data.sequence_number,
+                    received_data.length);
 
+
+            memset(&send_data, 0, sizeof(struct packet));
+            send_data.type = ACK;
+
+            if (received_data.sequence_number <= expected_packet) {
+                /* previous packet not lost, read packet */
+
+                if (received_data.sequence_number != 0) { /* read packet if it is a data packet */
+
+                    if (!file_buffer) {
+                        buffer_size = sizeof(char) * received_data.total_length;
+                        file_buffer = (char *) malloc(buffer_size);
+                        if (!file_buffer) die("Not enough space for receiver file buffer.");
+                    }
+                    memcpy(file_buffer + (received_data.sequence_number-1) * PACKETSIZE, received_data.data,
+                           received_data.length);
+                }
+
+                send_data.sequence_number = received_data.sequence_number;
+                expected_packet = send_data.sequence_number + 1;
+                sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
+                       sizeof(struct sockaddr));
+                ftime(&current_time);
+                fprintf(log_file, "| %.3f\t| ack  | %d\t| sent     | expect %ld\t\t\t\t|\n",
+                        calculate_elapsed_time(start_time, current_time), send_data.sequence_number, expected_packet);
+            } else {
+                /* previous packet lost */
+                send_data.sequence_number = expected_packet - 1;
+                sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
+                       sizeof(struct sockaddr));
+                ftime(&current_time);
+                fprintf(log_file, "| %.3f\t| ack  | %d\t| sent     | resent, expect %ld\t|\n",
+                        calculate_elapsed_time(start_time, current_time), send_data.sequence_number, expected_packet);
+            }
+            number_of_sent_packets++;
+        }
 
         /* transmission done */
         if (received_data.type == FINAL) {
-            memset(&send_data, 0, sizeof(struct packet));
-            send_data.type = FINAL;
-            send_data.sequence_number = 0;
-            send_data.length = 0;
-
-            // printf("\nTreated %s%d%s packets as lost\n", COLOR_NUMBER, loss_count, COLOR_NEUTRAL);
-            bytes_sent = sendto(receiver_socket, &send_data, sizeof(struct packet), 0,
-                                (struct sockaddr *) &sender_address,
-                                sizeof(struct sockaddr));
-
             ftime(&current_time);
-            elapsed_time =
-                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
-                    1000;
-            fprintf(log_file, "%.3f\t|  pkt: %d\t|  sent\n", elapsed_time,
-                    send_data.sequence_number);
-
-            fprintf(log_file, "\nTotal packets: %d\n", number_of_sent_packets);
+            elapsed_time = calculate_elapsed_time(start_time, current_time);
+            fprintf(log_file, "| %.3f\t| pkt  | %d\t| received | final\t\t\t|\n", elapsed_time,
+                    received_data.sequence_number);
+            fprintf(log_file, "=================================================================\n\n");
+            fprintf(log_file, "\nSent packets: %d\n", number_of_sent_packets);
             fprintf(log_file, "Lost packets: %d\n", loss_count);
             fprintf(log_file, "Elapsed time: %.3f seconds \n", elapsed_time);
             fprintf(log_file, "Throughput: %.2f pkts/sec\n", number_of_sent_packets / elapsed_time);
-            fprintf(log_file, "Target packet loss: %.4f%%\n", (double) packet_loss_probability * 100);
-            fprintf(log_file, "Actual packet loss: %.4f%%\n",
+            fprintf(log_file, "Target packet loss: %.3f%%\n", (double) packet_loss_probability * 100);
+            fprintf(log_file, "Actual packet loss: %.3f%%\n",
                     (double) (((double) loss_count) / ((double) number_of_sent_packets)) * 100);
 
             fclose(log_file);
 
-            file = fopen(strcat(name, "_copy"), "wb");
+            file = fopen(strcat(file_name, "_copy"), "wb");
             if (file) {
                 fwrite(file_buffer, buffer_size, 1, file);
             } else die("Error writing file");
 
-
             return 0;
-        }
-
-        if (!file_buffer) {
-            buffer_size = sizeof(char) * received_data.total_length;
-            file_buffer = (char *) malloc(buffer_size);
-            if (!file_buffer) die("Not enough space for client file buffer.");
-        }
-
-        /* send acknowledgement */
-        memset(&send_data, 0, sizeof(struct packet));
-        send_data.type = ACK;
-        send_data.length = 0;
-
-        if (received_data.sequence_number <= expected_packet) {
-            /* previous packet not lost */
-            memcpy(file_buffer + received_data.sequence_number * PACKETSIZE, received_data.data, received_data.length);
-            send_data.sequence_number = received_data.sequence_number;
-            expected_packet = send_data.sequence_number + 1;
-            sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
-                   sizeof(struct sockaddr));
-            number_of_sent_packets++;
-            ftime(&current_time);
-            elapsed_time =
-                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
-                    1000;
-            fprintf(log_file, "%.3f\t|  ack: %d\t|  sent\n", elapsed_time,
-                    send_data.sequence_number);
-        } else {
-            /* previous packet lost */
-            send_data.sequence_number = expected_packet - 1;
-            sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
-                   sizeof(struct sockaddr));
-            number_of_sent_packets++;
-            ftime(&current_time);
-            elapsed_time =
-                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
-                    1000;
-            fprintf(log_file, "%.3f\t|  ack: %d\t|  resent last ack\n", elapsed_time,
-                    send_data.sequence_number);
         }
     }
 }
@@ -195,4 +183,10 @@ void initialize_receiver_socket() {
 
     if (bind(receiver_socket, (struct sockaddr *) &receiver_address, sizeof(receiver_address)) == -1)
         die("Socket bind failed");
+}
+
+double calculate_elapsed_time(struct timeb start, struct timeb current) {
+    return ((1000.0 * (current.time - start.time) +
+             (current.millitm - start.millitm))) /
+           1000;
 }
