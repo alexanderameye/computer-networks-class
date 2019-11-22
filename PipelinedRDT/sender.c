@@ -18,6 +18,8 @@ void initialize_sender_socket();
 
 void initialize_receiver_address();
 
+double calculate_elapsed_time(struct timeb start, struct timeb current);
+
 void transmission_done(time_t start, int total_number_of_packets, int number_of_sent_packets);
 
 void *handle_file_transmission(void *filename);
@@ -39,9 +41,8 @@ long file_length = 0;
 
 /* PACKETS */
 
-int timeout;
+double timeout;
 int window_size;
-
 
 int main(int argc, char *argv[]) {
     init(argc, argv);
@@ -64,10 +65,10 @@ int main(int argc, char *argv[]) {
 void init(int argc, char *argv[]) {
     if (argc != 4) usage_error();
     receiver = (struct hostent *) gethostbyname(argv[1]);
-    timeout = atoi(argv[2]);
+    timeout = atof(argv[2]);
     window_size = atoi(argv[3]);
     printf("\n%s==================================================================", COLOR_ACTION);
-    printf("\n%sRECEIVER IP: %s%s\n%sTIMEOUT: %s%d\n%sWINDOW SIZE: %s%d\n%sPORT: %s%d",
+    printf("\n%sRECEIVER IP: %s%s\n%sTIMEOUT: %s%f\n%sWINDOW SIZE: %s%d\n%sPORT: %s%d",
            COLOR_CONTENT, COLOR_NUMBER, receiver->h_name, COLOR_CONTENT, COLOR_NUMBER, timeout,
            COLOR_CONTENT, COLOR_NUMBER,
            window_size, COLOR_CONTENT, COLOR_NUMBER, PORT);
@@ -149,15 +150,13 @@ void *handle_file_transmission(void *name) {
         memset(&received_data, 0, sizeof(struct packet));
         ufd.fd = sender_socket;
         ufd.events = POLLIN;
-        if ((rv = poll(&ufd, 1, timeout)) == -1) die("Polling error");
+        if ((rv = poll(&ufd, 1, timeout*1000)) == -1) die("Polling error");
         else if (ufd.revents & POLLIN) { //received somethign
             bytes_read = recvfrom(sender_socket, &received_data, sizeof(struct packet), 0,
                                   (struct sockaddr *) &receiver_address, &addr_size);
 
             ftime(&current_time);
-            elapsed_time =
-                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
-                    1000;
+            elapsed_time = calculate_elapsed_time(start_time, current_time);
             fprintf(log_file, "%.3f\t|  ack: %d\t|  received\n", elapsed_time,
                     received_data.sequence_number);
 
@@ -169,11 +168,8 @@ void *handle_file_transmission(void *name) {
             if (number_of_duplicate_acks >= 3) //retransmit
             {
                 ftime(&current_time);
-                elapsed_time =
-                        ((1000.0 * (current_time.time - start_time.time) +
-                          (current_time.millitm - start_time.millitm))) /
-                        1000;
-                // fprintf(log_file, "%.3f\t|  pkt: %d\t|  3 duplicated acks\n", elapsed_time,
+                elapsed_time = calculate_elapsed_time(start_time, current_time);
+                // fprintf(log_file, "%.3f\t|  pkt: %d\t|  3 duplicated acks\n", calculate_elapsed_time,
                 //       received_data.sequence_number);
 
 
@@ -187,11 +183,9 @@ void *handle_file_transmission(void *name) {
             current_packet = window_start;
 
             ftime(&current_time);
-            elapsed_time =
-                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
-                    1000;
+            elapsed_time = calculate_elapsed_time(start_time, current_time);
             fprintf(log_file, "%.3f\t|  pkt: %d\t|  timeout since %.3f\n", elapsed_time,
-                    received_data.sequence_number + 1, elapsed_time - ((double) timeout / 1000));
+                    received_data.sequence_number + 1, elapsed_time - timeout);
 
             //printf("\nResending at most %d packet(s) starting from pkt %ld\n", window_size,
             //    last_ACK + 1);
@@ -232,8 +226,7 @@ void *handle_file_transmission(void *name) {
                         struct sockaddr *) &receiver_address, sizeof(struct sockaddr));
 
                 ftime(&current_time);
-                elapsed_time = ((1000.0 * (current_time.time - start_time.time) +
-                                 (current_time.millitm - start_time.millitm))) / 1000;
+                elapsed_time = calculate_elapsed_time(start_time, current_time);
 
                 if (current_packet == window_start && number_of_sent_packets != 0) {
                     fprintf(log_file, "%.3f\t|  pkt: %d\t|  retransmitted\n", elapsed_time,
@@ -258,9 +251,7 @@ void *handle_file_transmission(void *name) {
 
 
             ftime(&current_time);
-            elapsed_time =
-                    ((1000.0 * (current_time.time - start_time.time) + (current_time.millitm - start_time.millitm))) /
-                    1000;
+            elapsed_time = calculate_elapsed_time(start_time, current_time);
             fprintf(log_file, "%.3f\t|  pkt: %d\t|  sent\n", elapsed_time,
                     send_data.sequence_number);
 
@@ -279,6 +270,13 @@ void *handle_file_transmission(void *name) {
         }
     }
 }
+
+double calculate_elapsed_time(struct timeb start, struct timeb current){
+    return  ((1000.0 * (current.time - start.time) +
+              (current.millitm - start.millitm))) /
+            1000;
+}
+
 
 
 
