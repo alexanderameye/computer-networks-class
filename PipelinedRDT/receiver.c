@@ -94,18 +94,22 @@ int main(int argc, char *argv[]) {
 
             memset(&send_data, 0, sizeof(struct packet));
             send_data.type = ACK;
+            send_data.length = 0;
 
             if (received_data.sequence_number <= expected_packet) {
                 /* previous packet not lost, read packet */
 
                 if (received_data.sequence_number != 0) { /* read packet if it is a data packet */
 
+
                     if (!file_buffer) {
+                        printf("\ntotal %d\n", received_data.total_length);
                         buffer_size = sizeof(char) * received_data.total_length;
                         file_buffer = (char *) malloc(buffer_size);
                         if (!file_buffer) die("Not enough space for receiver file buffer.");
                     }
-                    memcpy(file_buffer + (received_data.sequence_number-1) * PACKETSIZE, received_data.data,
+
+                    memcpy(file_buffer + (received_data.sequence_number - 1) * PACKETSIZE, received_data.data,
                            received_data.length);
                 }
 
@@ -114,7 +118,7 @@ int main(int argc, char *argv[]) {
                 sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                        sizeof(struct sockaddr));
                 ftime(&current_time);
-                fprintf(log_file, "| %.3f\t| ack  | %d\t| sent     | expect %ld\t\t\t\t|\n",
+                fprintf(log_file, "| %.3f\t| ack  | %d\t| sent     | expect %ld\t\t\t|\n",
                         calculate_elapsed_time(start_time, current_time), send_data.sequence_number, expected_packet);
             } else {
                 /* previous packet lost */
@@ -122,7 +126,7 @@ int main(int argc, char *argv[]) {
                 sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
                        sizeof(struct sockaddr));
                 ftime(&current_time);
-                fprintf(log_file, "| %.3f\t| ack  | %d\t| sent     | resent, expect %ld\t|\n",
+                fprintf(log_file, "| %.3f\t| ack  | %d\t| sent     | resent, expect %ld\t\t|\n",
                         calculate_elapsed_time(start_time, current_time), send_data.sequence_number, expected_packet);
             }
             number_of_sent_packets++;

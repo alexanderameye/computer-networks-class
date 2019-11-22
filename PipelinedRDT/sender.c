@@ -122,7 +122,8 @@ void *handle_file_transmission(void *name) {
     fseek(file, 0, SEEK_END);
     long file_length = ftell(file);
     rewind(file);
-    char *file_buffer = (char *) malloc((file_length) * sizeof(char));
+    char *file_buffer;
+    file_buffer = (char *) malloc((file_length) * sizeof(char));
     if (!file_buffer) die("File too large");
     fread(file_buffer, file_length, 1, file);
     fclose(file);
@@ -197,6 +198,7 @@ void *handle_file_transmission(void *name) {
                 /* after timeout send first pkt that was not yet acked */
                 if (current_packet == window_start) seq_num = last_ACK + 1;
 
+              //  int buffer_address = seq
                 if (seq_num == 0) {
                     /* file name packet */
                     send_data.length = strlen(name);
@@ -209,7 +211,7 @@ void *handle_file_transmission(void *name) {
                         send_data.length = (file_length % PACKETSIZE);
                     else send_data.length = PACKETSIZE;
 
-                    memcpy(send_data.data, &file_buffer[seq_num * PACKETSIZE], send_data.length);
+                    memcpy(send_data.data, &file_buffer[(seq_num-1) * PACKETSIZE], send_data.length);
                     send_data.total_length = file_length;
                 }
 
@@ -236,6 +238,7 @@ void *handle_file_transmission(void *name) {
             memset(&send_data, 0, sizeof(struct packet));
             send_data.sequence_number = number_of_unique_packets - 1;
             send_data.type = FINAL;
+            send_data.length = 0;
 
             bytes_sent = sendto(sender_socket, &send_data, sizeof(struct packet), 0,
                                 (struct sockaddr *) &receiver_address,
