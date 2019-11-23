@@ -24,11 +24,11 @@ int receiver_socket;
 struct sockaddr_in receiver_address;
 struct packet received_data, send_data;
 double packet_loss_probability;
-int packet_was_lost = 0, loss_count;
+int packet_was_lost = 0, loss_count = 0;
 int bytes_read, bytes_sent;
 long expected_packet = -1;
 socklen_t addr_size = sizeof(struct sockaddr);
-int number_of_sent_packets = 0;
+int number_of_sent_packets = 0, number_of_received_packets = 0;
 
 
 /* FILE */
@@ -53,6 +53,8 @@ int main(int argc, char *argv[]) {
     double elapsed_time;
 
     while (1) {
+        number_of_received_packets++;
+
         /* receive packet and generate loss */
         bytes_read = recvfrom(receiver_socket, &received_data, sizeof(struct packet), 0,
                               (struct sockaddr *) &sender_address, &addr_size);
@@ -103,7 +105,6 @@ int main(int argc, char *argv[]) {
 
 
                     if (!file_buffer) {
-                        printf("\ntotal %d\n", received_data.total_length);
                         buffer_size = sizeof(char) * received_data.total_length;
                         file_buffer = (char *) malloc(buffer_size);
                         if (!file_buffer) die("Not enough space for receiver file buffer.");
@@ -140,12 +141,13 @@ int main(int argc, char *argv[]) {
                     received_data.sequence_number);
             fprintf(log_file, "=================================================================\n\n");
             fprintf(log_file, "\nSent packets: %d\n", number_of_sent_packets);
+            fprintf(log_file, "Received packets: %d\n", number_of_received_packets);
             fprintf(log_file, "Lost packets: %d\n", loss_count);
             fprintf(log_file, "Elapsed time: %.3f seconds \n", elapsed_time);
             fprintf(log_file, "Throughput: %.2f pkts/sec\n", number_of_sent_packets / elapsed_time);
             fprintf(log_file, "Target packet loss: %.3f%%\n", (double) packet_loss_probability * 100);
             fprintf(log_file, "Actual packet loss: %.3f%%\n",
-                    (double) (((double) loss_count) / ((double) number_of_sent_packets)) * 100);
+                    (double) (((double) loss_count) / ((double) number_of_received_packets)) * 100);
 
             fclose(log_file);
 

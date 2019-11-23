@@ -134,13 +134,15 @@ void *handle_file_transmission(void *name) {
     /* log file information */
     fprintf(log_file, "File name: %s\n", (char *) name);
     fprintf(log_file, "File size: %ld bytes\n", file_length);
+    fprintf(log_file, "Window size: %d packets\n", window_size);
+    fprintf(log_file, "Timeout: %f seconds\n", timeout);
     fprintf(log_file, "Data: %d packets of %d bytes, 1 packet of %ld bytes\n", number_of_unique_packets - 3,
             PACKETSIZE, file_length - ((number_of_unique_packets - 3) * PACKETSIZE));
     fprintf(log_file, "Other: 1 packet of %ld bytes and 1 packet of 0 bytes\n", strlen(name));
     fprintf(log_file, "Total: %d packets \n\n", number_of_unique_packets);
-    fprintf(log_file, "=================================================================\n");
-    fprintf(log_file, "| Time\t| Type | Index\t| Action   | Extra\t\t\t|\n");
-    fprintf(log_file, "=================================================================\n");
+    fprintf(log_file, "=========================================================================\n");
+    fprintf(log_file, "| Time\t| Type | Index\t| Action   | Extra\t\t\t\t|\n");
+    fprintf(log_file, "=========================================================================\n");
 
 
     goto send_packets;
@@ -159,27 +161,37 @@ void *handle_file_transmission(void *name) {
             if (received_ack == last_ACK) {
                 /* duplicate ack */
                 number_of_duplicate_acks += 1;
-                fprintf(log_file, "| %.3f\t| ack  | %d\t| received | duplicate %d\t\t|\n",
+                fprintf(log_file, "| %.3f\t| ack  | %d\t| received | duplicate %d\t\t\t|\n",
                         calculate_elapsed_time(start_time, current_time),
                         received_data.sequence_number, number_of_duplicate_acks);
+
+                /* fast retransmission */
+                if (number_of_duplicate_acks == 3) {
+                    received_data.sequence_number = last_ACK;
+                    seq_num = last_ACK + 1;
+                    received_data.type = ACK;
+                    current_packet = window_start;
+                }
             } else if (received_ack == last_ACK + 1 && received_ack >= window_start) {
                 /* ack in-order, shift window */
+                number_of_duplicate_acks = 0;
                 window_end = window_end + (received_ack + 1 - window_start);
                 window_start = received_ack + 1;
                 last_ACK += 1;
-                fprintf(log_file, "| %.3f\t| ack  | %d\t| received | window [%d,%d]\t\t|\n",
+                fprintf(log_file, "| %.3f\t| ack  | %d\t| received | window [%d,%d]\t\t\t|\n",
                         calculate_elapsed_time(start_time, current_time),
                         received_data.sequence_number, window_start, window_end);
             }
         } else if (rv == 0) {
             /* timeout */
+            number_of_duplicate_acks = 0;
             received_data.sequence_number = last_ACK;
             seq_num = last_ACK + 1;
             received_data.type = ACK;
             current_packet = window_start;
 
             ftime(&current_time);
-            fprintf(log_file, "| %.3f\t| pkt  | %ld\t| timeout  | since %.3f\t\t|\n",
+            fprintf(log_file, "| %.3f\t| pkt  | %ld\t| timeout  | since %.3f\t\t\t|\n",
                     calculate_elapsed_time(start_time, current_time),
                     last_ACK + 1, calculate_elapsed_time(start_time, current_time) - timeout);
         }
@@ -198,7 +210,6 @@ void *handle_file_transmission(void *name) {
                 /* after timeout send first pkt that was not yet acked */
                 if (current_packet == window_start) seq_num = last_ACK + 1;
 
-              //  int buffer_address = seq
                 if (seq_num == 0) {
                     /* file name packet */
                     send_data.length = strlen(name);
@@ -211,7 +222,7 @@ void *handle_file_transmission(void *name) {
                         send_data.length = (file_length % PACKETSIZE);
                     else send_data.length = PACKETSIZE;
 
-                    memcpy(send_data.data, &file_buffer[(seq_num-1) * PACKETSIZE], send_data.length);
+                    memcpy(send_data.data, &file_buffer[(seq_num - 1) * PACKETSIZE], send_data.length);
                     send_data.total_length = file_length;
                 }
 
@@ -221,11 +232,19 @@ void *handle_file_transmission(void *name) {
                 ftime(&current_time);
 
                 if (current_packet == window_start && number_of_sent_packets != 0) {
-                    fprintf(log_file, "| %.3f\t| pkt  | %d\t| sent     | retransmission %d bytes\t|\n",
-                            calculate_elapsed_time(start_time, current_time),
-                            send_data.sequence_number, send_data.length);
+                    if (number_of_duplicate_acks == 3) {
+                        fprintf(log_file, "| %.3f\t| pkt  | %d\t| sent     | fast retransmission %d bytes\t|\n",
+                                calculate_elapsed_time(start_time, current_time),
+                                send_data.sequence_number, send_data.length);
+                        number_of_duplicate_acks = 0;
+                    } else {
+                        fprintf(log_file, "| %.3f\t| pkt  | %d\t| sent     | retransmission %d bytes\t\t|\n",
+                                calculate_elapsed_time(start_time, current_time),
+                                send_data.sequence_number, send_data.length);
+                    }
+
                 } else
-                    fprintf(log_file, "| %.3f\t| pkt  | %d\t| sent     | %d bytes\t\t\t|\n",
+                    fprintf(log_file, "| %.3f\t| pkt  | %d\t| sent     | %d bytes\t\t\t\t|\n",
                             calculate_elapsed_time(start_time, current_time),
                             send_data.sequence_number, send_data.length);
 
@@ -248,9 +267,9 @@ void *handle_file_transmission(void *name) {
 
             ftime(&current_time);
             double elapsed_time = calculate_elapsed_time(start_time, current_time);
-            fprintf(log_file, "| %.3f\t| pkt  | %d\t| sent     | final\t\t\t|\n", elapsed_time,
+            fprintf(log_file, "| %.3f\t| pkt  | %d\t| sent     | final\t\t\t\t|\n", elapsed_time,
                     send_data.sequence_number);
-            fprintf(log_file, "=================================================================\n");
+            fprintf(log_file, "=========================================================================\n");
 
             fprintf(log_file, "\nSent packets: %d\n", number_of_sent_packets);
             fprintf(log_file, "Unique packets: %d\n", number_of_unique_packets);

@@ -1,5 +1,6 @@
 #ifndef PIPELINEDRDT_COMMON_H
 #define PIPELINEDRDT_COMMON_H
+
 #include <string.h>
 #include <stdarg.h>
 
@@ -7,20 +8,8 @@
 #define SOCKET_DOMAIN AF_INET // IP version 4 Address Family (Ipv4)
 #define SOCKET_TYPE SOCK_DGRAM // UDP Protocol
 #define SOCKET_PROTOCOL 0 // IP Protocol
-
-
 #define PACKETSIZE 1400
-
-#define MAXBUFFERLENGTH 100
-
-
 #define RECEIVER_IP "127.0.0.1"
-
-
-#define MAX_CONNECTIONS 100
-#define TRUE 1
-#define FALSE 0
-
 
 typedef enum {
     DATA,
@@ -42,8 +31,6 @@ struct packet {
 #define COLOR_NEUTRAL "\033[0m"
 #define COLOR_NEGATIVE "\033[1;31m"
 #define COLOR_NUMBER "\033[0;32m"
-#define COLOR_POSITIVE "\033[0;32m"
-
 
 /* Logs an error message to the terminal */
 void die(char *message, ...) {
@@ -59,78 +46,17 @@ void die(char *message, ...) {
     exit(1);
 }
 
-typedef enum {
-    SENDING,
-    RECEIVING
-} action;
-
 int packet_header_size() {
-    return sizeof(struct packet) - PACKETSIZE; // Minus the 512 bytes of data
+    return sizeof(struct packet) - PACKETSIZE;
 }
 
-
 int random_loss(const double probability, int *counter) {
-    double random = drand48(); //generate random double [0.0, 1.0]
+    double random = drand48();
     if (random >= probability) return 0;
     else {
         *counter = *counter + 1;
         return 1;
     }
-}
-
-
-void print_packet_info_sender(const struct packet *packet, action type) {
-    if (type == SENDING) {
-        printf("%sSENT    %s   pkt %s%d%s", COLOR_ACTION, COLOR_NEUTRAL, COLOR_NUMBER,
-               packet->sequence_number, COLOR_NEUTRAL);
-        if (packet->length < PACKETSIZE && packet->length > 0)
-            printf(" with size %s%d bytes%s", COLOR_NUMBER, packet->length,
-                   COLOR_NEUTRAL);
-        printf("\n");
-    } else {
-        printf("%sRECEIVED%s   ack %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
-               packet->sequence_number, COLOR_NEUTRAL);
-        printf("\n");
-    }
-    return;
-}
-
-void removeChar(char *s, int c){
-
-    int j, n = strlen(s);
-    for (int i=j=0; i<n; i++)
-        if (s[i] != c)
-            s[j++] = s[i];
-
-    s[j] = '\0';
-}
-
-void print_packet_info_receiver(const struct packet *packet, action type) {
-    if (type == RECEIVING) {
-        printf("%sRECEIVED%s   pkt %s%d%s", COLOR_CONTENT, COLOR_NEUTRAL, COLOR_NUMBER,
-               packet->sequence_number, COLOR_NEUTRAL);
-        if (packet->length < PACKETSIZE && packet->length > 0)
-            printf(" with size %s%d bytes%s", COLOR_NUMBER, packet->length,
-                   COLOR_NEUTRAL); // for last packet, not full size so specify
-        printf("\n");
-    } else {
-        printf("%sSENT    %s   ack %s%d%s", COLOR_ACTION, COLOR_NEUTRAL, COLOR_NUMBER,
-               packet->sequence_number, COLOR_NEUTRAL);
-        printf("\n");
-    }
-    return;
-}
-
-/* Logs a success or neutral message to the terminal */
-void live(char *message, ...) {
-    va_list ap;
-    va_start(ap, message);
-    printf("%s[ACTION] ", COLOR_ACTION);
-    printf("%s", COLOR_NEUTRAL);
-    vfprintf(stdout, message, ap);
-    fprintf(stdout, "\n");
-    fflush(stdout);
-    va_end(ap);
 }
 
 void usage_error() {
@@ -141,6 +67,5 @@ void usage_error() {
     fprintf(stdout, "---------------------------------------------------\n");
     exit(1);
 }
-
 
 #endif
