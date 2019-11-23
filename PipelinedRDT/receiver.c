@@ -28,8 +28,7 @@ int packet_was_lost = 0, loss_count = 0;
 int bytes_read, bytes_sent;
 long expected_packet = -1;
 socklen_t addr_size = sizeof(struct sockaddr);
-int number_of_sent_packets = 0, number_of_received_packets = 0;
-
+int number_of_sent_packets = 0, number_of_received_packets = 0, number_of_unique_packets = 0;
 
 /* FILE */
 char *file_buffer = NULL;
@@ -93,7 +92,6 @@ int main(int argc, char *argv[]) {
                     calculate_elapsed_time(start_time, current_time), received_data.sequence_number,
                     received_data.length);
 
-
             memset(&send_data, 0, sizeof(struct packet));
             send_data.type = ACK;
             send_data.length = 0;
@@ -114,6 +112,7 @@ int main(int argc, char *argv[]) {
                            received_data.length);
                 }
 
+                number_of_unique_packets++;
                 send_data.sequence_number = received_data.sequence_number;
                 expected_packet = send_data.sequence_number + 1;
                 sendto(receiver_socket, &send_data, sizeof(struct packet), 0, (struct sockaddr *) &sender_address,
@@ -141,10 +140,16 @@ int main(int argc, char *argv[]) {
                     received_data.sequence_number);
             fprintf(log_file, "=================================================================\n\n");
             fprintf(log_file, "\nSent packets: %d\n", number_of_sent_packets);
+            fprintf(log_file, "Unique packets: %d\n", number_of_unique_packets);
             fprintf(log_file, "Received packets: %d\n", number_of_received_packets);
             fprintf(log_file, "Lost packets: %d\n", loss_count);
             fprintf(log_file, "Elapsed time: %.3f seconds \n", elapsed_time);
             fprintf(log_file, "Throughput: %.2f pkts/sec\n", number_of_sent_packets / elapsed_time);
+            fprintf(log_file, "Goodput: %.2f pkts/sec\n", number_of_unique_packets / elapsed_time);
+            fprintf(log_file, "Badput: %.2f pkts/sec\n",
+                    (number_of_sent_packets - number_of_unique_packets) / elapsed_time);
+            fprintf(log_file, "Efficiency: %.2f%%\n",
+                    ((double) number_of_unique_packets / (double) number_of_sent_packets) * 100);
             fprintf(log_file, "Target packet loss: %.3f%%\n", (double) packet_loss_probability * 100);
             fprintf(log_file, "Actual packet loss: %.3f%%\n",
                     (double) (((double) loss_count) / ((double) number_of_received_packets)) * 100);
@@ -168,10 +173,9 @@ void init(int argc, char *argv[]) {
     if (argc != 2) usage_error();
     packet_loss_probability = atof(argv[1]);
     printf("\n%s==================================================================", COLOR_ACTION);
-    printf("\n%sRECEIVER IP: %s%s\n%sPACKET LOSS PROBABILITY: %s%.2f%%\n%sBUFFER SIZE: \nUPDATED BUFFER SIZE:%s",
-           COLOR_CONTENT, COLOR_NUMBER, RECEIVER_IP, COLOR_CONTENT, COLOR_NUMBER,
-           (double) packet_loss_probability * 100, COLOR_CONTENT, COLOR_NEUTRAL);
-    printf("\n%s===================================================================\n\n", COLOR_ACTION);
+    printf("\n%sRECEIVER IP: %s%s\n%sPORT: %s%d\n%sPACKET LOSS PROBABILITY: %s%.2f%%%s\n",
+           COLOR_CONTENT, COLOR_NUMBER, RECEIVER_IP, COLOR_CONTENT, COLOR_NUMBER, PORT, COLOR_CONTENT, COLOR_NUMBER,
+           (double) packet_loss_probability * 100, COLOR_NEUTRAL);
 }
 
 /* Creates a receiver socket, initializes its address and binds it */
@@ -183,12 +187,34 @@ void initialize_receiver_socket() {
     inet_pton(AF_INET, RECEIVER_IP, &(receiver_address.sin_addr));
     receiver_address.sin_port = htons(PORT);
 
+    /* increase receive buffer */
+
+
+
+    /* allow us to restart receiver right after it was closed*/
     setsockopt(receiver_socket, SOL_SOCKET, SO_REUSEADDR,
                (const void *) 1, sizeof(int));
     char str[INET_ADDRSTRLEN];
 
     if (bind(receiver_socket, (struct sockaddr *) &receiver_address, sizeof(receiver_address)) == -1)
         die("Socket bind failed");
+
+    /* get receive buffer size */
+    int socket_buffer_size;
+    socklen_t len = sizeof(socket_buffer_size);
+    getsockopt(receiver_socket, SOL_SOCKET, SO_RCVBUF, &socket_buffer_size, &len);
+
+    printf("%sBUFFER SIZE: %s%d\n", COLOR_CONTENT, COLOR_NUMBER, socket_buffer_size);
+
+    /* increase receive buffer size */
+    socket_buffer_size = 10 * 1024 * 1024;
+
+    setsockopt(receiver_socket, SOL_SOCKET, SO_RCVBUF, &socket_buffer_size, sizeof(socket_buffer_size));
+    len = sizeof(socket_buffer_size);
+    getsockopt(receiver_socket, SOL_SOCKET, SO_RCVBUF, &socket_buffer_size, &len);
+
+    printf("%sUPDATED BUFFER SIZE: %s%d%s", COLOR_CONTENT, COLOR_NUMBER, socket_buffer_size, COLOR_CONTENT);
+    printf("\n%s===================================================================\n\n", COLOR_ACTION);
 }
 
 double calculate_elapsed_time(struct timeb start, struct timeb current) {

@@ -166,12 +166,12 @@ void *handle_file_transmission(void *name) {
                         received_data.sequence_number, number_of_duplicate_acks);
 
                 /* fast retransmission */
-                if (number_of_duplicate_acks == 3) {
+               /* if (number_of_duplicate_acks == 3) {
                     received_data.sequence_number = last_ACK;
                     seq_num = last_ACK + 1;
                     received_data.type = ACK;
                     current_packet = window_start;
-                }
+                }*/
             } else if (received_ack == last_ACK + 1 && received_ack >= window_start) {
                 /* ack in-order, shift window */
                 number_of_duplicate_acks = 0;
